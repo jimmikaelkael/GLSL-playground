@@ -1,0 +1,185 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Simplex 2D mesh</title>
+        <meta charset="utf-8">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="js/Three.min.js"></script>
+    <script src="js/OrbitAndPanControls.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        //
+        // Description : Array and textureless GLSL 2D simplex noise function.
+        // Author : Ian McEwan, Ashima Arts.
+        // Maintainer : ijm
+        // Lastmod : 20110822 (ijm)
+        // License : Copyright (C) 2011 Ashima Arts. All rights reserved.
+        // Distributed under the MIT License. See LICENSE file.
+        // https://github.com/ashima/webgl-noise
+        //
+
+        vec2 mod289(vec2 x) {
+            return x - floor(x * (1.0 / 289.0)) * 289.0;
+        }
+
+        vec3 mod289(vec3 x) {
+            return x - floor(x * (1.0 / 289.0)) * 289.0;
+        }
+
+        vec3 permute(vec3 x) {
+            return mod289(((x*34.0)+1.0)*x);
+        }
+
+        float snoise(vec2 v) {
+            const vec4 C = vec4(
+                0.211324865405187,  // (3.0-sqrt(3.0))/6.0
+                0.366025403784439,  // 0.5*(sqrt(3.0)-1.0)
+               -0.577350269189626,  // -1.0 + 2.0 * C.x
+                0.024390243902439   // 1.0 / 41.0
+            );
+            // First corner
+            vec2 i  = floor(v + dot(v, C.yy));
+            vec2 x0 = v -   i + dot(i, C.xx);
+
+            // Other corners
+            vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+            vec4 x12 = x0.xyxy + C.xxzz;
+            x12.xy -= i1;
+
+            // Permutations
+            i = mod289(i); // Avoid truncation effects in permutation
+            vec3 p = permute(
+                permute(i.y + vec3(0.0, i1.y, 1.0)) +
+                i.x +
+                vec3(0.0, i1.x, 1.0)
+            );
+
+            vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+            m = m*m ;
+            m = m*m ;
+
+            // Gradients: 41 points uniformly over a line, mapped onto a diamond.
+            // The ring size 17*17 = 289 is close to a multiple of 41 (41*7 = 287)
+            vec3 x = 2.0 * fract(p * C.www) - 1.0;
+            vec3 h = abs(x) - 0.5;
+            vec3 ox = floor(x + 0.5);
+            vec3 a0 = x - ox;
+
+            // Normalise gradients implicitly by scaling m
+            // Approximation of: m *= inversesqrt(a0*a0 + h*h);
+            m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+
+            // Compute final noise value at P
+            vec3 g;
+            g.x  = a0.x  * x0.x  + h.x  * x0.y;
+            g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+            return 130.0 * dot(m, g);
+        }
+
+        float fBm(vec2 P, float lacunarity, float gain) {
+            float sum = 0.0;
+            float amp = 1.0;
+            vec2 pp = P;
+
+            // 9 octaves of noise
+            for(int i = 0; i < 9; i++) {
+                amp *= gain;
+                sum += amp * snoise(pp);
+                pp *= lacunarity;
+            }
+            return sum;
+        }
+
+        void main() {
+            float displacement = fBm(0.005 * position.xy, 2.0, 0.5) * 50.0;
+            // displacing vertex on z-axis
+            vec3 newPosition = vec3(position.x, position.y, displacement);
+            newPosition += normal; 
+            gl_Position = projectionMatrix * modelViewMatrix * vec4( newPosition, 1.0 );
+        }
+    </script>
+
+    <script type="x-shader/x-vertex" id="fragmentShader">
+        // Fragment Shader code
+        void main() {
+            // all pixels are set to blue
+            gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0 );
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            fov = 60,
+            clock = new THREE.Clock();
+
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create axis helpers and add them to the scene
+            var axes = new THREE.AxisHelper(200);
+            scene.add(axes);
+
+            // create a camera the size of the browser window
+            // and place it 150 units away, looking towards the center of the scene from top
+            camera = new THREE.PerspectiveCamera(
+                fov,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 150;
+            camera.lookAt(scene.position); 
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                wireframe: true,
+                vertexShader: document.getElementById( 'vertexShader' ).textContent,
+                fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene
+            mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(128, 128, 128, 128),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // set a black background color
+            renderer.setClearColor(0);
+
+            // controls
+            controls = new THREE.OrbitAndPanControls(camera, renderer.domElement);
+
+            container.appendChild(renderer.domElement);
+
+            render();
+        });
+
+        function render() {
+            controls.update(clock.getDelta());
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
