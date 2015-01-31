@@ -9,7 +9,7 @@
     </body>
 
     <script src="js/Three.min.js"></script>
-    <script src="js/OrbitAndPanControls.js"></script>
+    <script src="js/OrbitControls.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -97,7 +97,7 @@
         }
 
         void main() {
-            float displacement = fBm(0.005 * position.xy, 2.0, 0.5) * 50.0;
+            float displacement = fBm(0.0001 * position.xy, 2.0, 0.5) * 2048.0;
             // displacing vertex on z-axis
             vec3 newPosition = vec3(position.x, position.y, displacement);
             newPosition += normal; 
@@ -140,9 +140,14 @@
                 fov,
                 window.innerWidth / window.innerHeight,
                 1,
-                10000);
-            camera.position.z = 150;
-            camera.lookAt(scene.position); 
+                20000);
+            camera.position.y = -4000;
+            camera.position.z = 250;
+
+            // controls
+            controls = new THREE.OrbitControls(camera);
+            controls.center.set(0.0, 100.0, 0.0);
+            controls.userPanSpeed = 100;
 
             // add the camera to the scene
             scene.add(camera);
@@ -150,13 +155,13 @@
             // create a shader material
             material = new THREE.ShaderMaterial({
                 wireframe: true,
-                vertexShader: document.getElementById( 'vertexShader' ).textContent,
-                fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent
             });
 
             // create a plane mesh and assign the material, then add the mesh to the scene
             mesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(128, 128, 128, 128),
+                new THREE.PlaneBufferGeometry(6000, 6000, 256, 256),
                 material
             );
             scene.add(mesh);
@@ -167,13 +172,16 @@
             // set a black background color
             renderer.setClearColor(0);
 
-            // controls
-            controls = new THREE.OrbitAndPanControls(camera, renderer.domElement);
-
             container.appendChild(renderer.domElement);
 
             render();
         });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+        }
 
         function render() {
             controls.update(clock.getDelta());
