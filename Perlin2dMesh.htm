@@ -14,6 +14,8 @@
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
 
+        varying float noise;
+
         //
         // GLSL textureless classic 2D noise "cnoise".
         // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
@@ -87,8 +89,8 @@
             float amp = 1.0;
             vec2 pp = P;
 
-            // 9 octaves of noise
-            for(int i = 0; i < 9; i++) {
+            // 6 octaves of noise
+            for(int i = 0; i < 6; i++) {
                 sum += amp * pnoise(pp);
                 amp *= gain;
                 pp *= lacunarity;
@@ -97,18 +99,22 @@
         }
 
         void main() {
-            float displacement = fBm(0.0005 * position.xy, 2.0, 0.5) * 768.0;
+            noise = fBm(0.0005 * position.xy, 2.0, 0.5);
             // displacing vertex on z-axis
-            vec3 newPosition = vec3(position.x, position.y, displacement);
+            vec3 newPosition = vec3(position.x, position.y, noise * 768.0);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
         }
     </script>
 
     <script type="x-shader/x-vertex" id="fragmentShader">
         // Fragment Shader code
+
+        varying float noise;
+
         void main() {
-            // all pixels are set to blue
-            gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0 );
+            // modulate a color with the noise like ambient occlusion
+            vec3 color = vec3(0.0, 0.0, 1.0) * (1.0 - noise * -1.0);
+            gl_FragColor = vec4(color.rgb, 1.0);
         }
     </script>
 
