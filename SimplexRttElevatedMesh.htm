@@ -11,9 +11,9 @@
     <script src="js/Three.min.js"></script>
     <script src="js/OrbitControls.js"></script>
     <script src="js/Prototype.js"></script>
-    <script src="js/HeightMap.js"></script>
+    <script src="js/NoiseRTT.js"></script>
 
-    <script type="x-shader/x-vertex" id="heightMapVertexShader">
+    <script type="x-shader/x-vertex" id="noiseVertexShader">
         // Vertex Shader code
 
         varying vec2 v_texCoord2D;
@@ -24,7 +24,7 @@
         }
     </script>
 
-    <script type="x-shader/x-fragment" id="heightMapFragmentShader">
+    <script type="x-shader/x-fragment" id="noiseFragmentShader">
         // Fragment Shader code
 
         uniform float seed;
@@ -146,18 +146,20 @@
         void main() {
             vec2 uv = (v_texCoord2D + offset) * uvScale;
             float h = fBm(vec3(uv, seed), 2.0, 0.5);
-            gl_FragColor = vec4(0.5 + 0.4 * vec3(h, h, h), 1.0);
+            // height noise is stored on alpha channel
+            gl_FragColor = vec4(vec3(0.0), 0.5 + 0.4 * h);
         }
     </script>
 
     <script type="x-shader/x-vertex" id="displayVertexShader">
         // Vertex Shader code
+
         uniform sampler2D heightmapTexture;
         varying float height;
 
         void main() {
-            // lookup for height on the texture map, taking arbitrarily red channel.
-            height = texture2D(heightmapTexture, uv).x;
+            // lookup for height on the texture map, taking alpha channel as height.
+            height = texture2D(heightmapTexture, uv).a;
             // apply a factor to get displacement
             float displacement = height * 1500.0;
             // displace the vertex
@@ -168,10 +170,11 @@
 
     <script type="x-shader/x-fragment" id="displayFragmentShader">
         // Fragment Shader code
+
         varying float height;
 
         void main() {
-            gl_FragColor = vec4(0.0, 0.0, height * 1.25, 1.0);
+            gl_FragColor = vec4(0.0, 0.0, height, 1.0);
         }
     </script>
 
@@ -183,7 +186,7 @@
             mesh,
             camera,
             fov = 60,
-            heightMap,
+            noiseRTT,
             clock = new THREE.Clock();
 
         window.addEventListener('load', function() {
@@ -224,27 +227,22 @@
             // add the camera to the scene
             scene.add(camera);
 
-            // initialize heightmap
+            // initialize noiseRTT
             var sizeX = 256;
             var sizeY = 256;
             var noiseScale = 2.0;
-            var seed = 0;
-            heightMap = new HeightMap(sizeX, sizeY, noiseScale, seed);
+            var seed = 12345;
+            noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // create a shader material
             material = new THREE.ShaderMaterial({
                 wireframe: true,
                 uniforms: {
-                    heightmapTexture: { type: "t", value: heightMap.getTexture() },
+                    heightmapTexture: { type: "t", value: noiseRTT.getTexture() },
                 },
                 vertexShader: document.getElementById('displayVertexShader').textContent,
                 fragmentShader: document.getElementById('displayFragmentShader').textContent
             });
-
-            /*material = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                map: heightMap.getTexture()
-            });*/
 
             // create a plane mesh and assign the material, then add the mesh to the scene
             mesh = new THREE.Mesh(
@@ -267,9 +265,9 @@
 
             renderer.clear();
 
-            // render heightmap to texture
+            // render noise to texture
             renderer.setSize(256, 256);
-            heightMap.render(renderer, 0, 0);
+            noiseRTT.render(renderer, 0, 0);
 
             // render scene
             renderer.setSize(window.innerWidth, window.innerHeight);
