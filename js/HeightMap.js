@@ -1,7 +1,7 @@
 var HeightMap = Class.create();
 
 HeightMap.prototype = {
-    initialize : function(width, height, seed) {
+    initialize : function(width, height, noiseScale, seed) {
         this.width = width;
         this.height = height;
         this.scene = new THREE.Scene();
@@ -22,15 +22,15 @@ HeightMap.prototype = {
         this.material = new THREE.ShaderMaterial({
             uniforms: {
                 seed: { type: "f", value: seed },
-                uvScale: { type: "v2", value: new THREE.Vector2(1 / this.width, 1 / this.height) },
-                offset: { type: "v2", value: new THREE.Vector2() }
+                uvScale: { type: "v2", value: new THREE.Vector2(noiseScale, noiseScale) },
+                offset: { type: "v2", value: new THREE.Vector2(0.0, 0.0) }
             },
             vertexShader: document.getElementById('heightMapVertexShader').textContent,
             fragmentShader: document.getElementById('heightMapFragmentShader').textContent
         })
 
         this.mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(this.width, this.height),
+            new THREE.PlaneBufferGeometry(this.width, this.height),
             this.material
         );
         this.mesh.position.z = -100;
