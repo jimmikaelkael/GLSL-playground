@@ -153,8 +153,7 @@
         void main() {
             vec2 uv = (v_texCoord2D + offset) * uvScale;
             float h = fBm(vec3(uv, seed), 2.0, 0.5);
-            // height noise is stored on alpha channel
-            gl_FragColor = vec4(vec3(0.0), 0.5 + 0.5 * h);
+            gl_FragColor = vec4(vec3(0.5 + 0.5 * h), 1.0);
         }
     </script>
 
@@ -165,8 +164,8 @@
         varying float height;
 
         void main() {
-            // lookup for height on the texture map, taking alpha channel as height.
-            height = texture2D(heightmapTexture, uv).a;
+            // lookup for height on the texture map, taking red channel as height.
+            height = texture2D(heightmapTexture, uv).x;
             // apply a factor to get displacement
             float displacement = height * 1500.0;
             // displace the vertex
