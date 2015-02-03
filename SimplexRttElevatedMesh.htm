@@ -199,7 +199,6 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             // set a black background color
             renderer.setClearColor(0);
-            renderer.autoClear = false;
 
             container.appendChild(renderer.domElement);
 
@@ -262,8 +261,6 @@
 
         function render() {
             controls.update(clock.getDelta());
-
-            renderer.clear();
 
             // render noise to texture
             renderer.setSize(256, 256);
