@@ -77,7 +77,7 @@
                 permute(i.y + vec3(0.0, i1.y, 1.0)) +
                 i.x +
                 vec3(0.0, i1.x, 1.0)
-            );
+            ) + seed;
 
             vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
             m = m*m ;
@@ -171,7 +171,7 @@
             var sizeX = 256;
             var sizeY = 256;
             var noiseScale = 2.0;
-            var seed = 0;
+            var seed = 12345;
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // create a mesh material from simple texture

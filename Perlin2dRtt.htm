@@ -72,7 +72,7 @@
             vec4 fx = Pf.xzxz;
             vec4 fy = Pf.yyww;
 
-            vec4 i = permute(permute(ix) + iy);
+            vec4 i = permute(permute(ix) + iy) + seed;
 
             vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
             vec4 gy = abs(gx) - 0.5 ;
@@ -171,7 +171,7 @@
             var sizeX = 256;
             var sizeY = 256;
             var noiseScale = 2.0;
-            var seed = 0;
+            var seed = 654321;
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // create a mesh material from simple texture

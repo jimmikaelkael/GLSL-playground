@@ -76,7 +76,7 @@
             vec4 fx = Pf.xzxz;
             vec4 fy = Pf.yyww;
 
-            vec4 i = permute(permute(ix) + iy);
+            vec4 i = permute(permute(ix) + iy) + seed;
 
             vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
             vec4 gy = abs(gx) - 0.5 ;
@@ -134,7 +134,7 @@
         void main() {
             vec2 uv = (v_texCoord2D + offset) * uvScale;
             float h = fBm(uv, 2.0, 0.5);
-            gl_FragColor = vec4(0.5 + 0.75 * vec3(h), 1.0);
+            gl_FragColor = vec4(0.5 + 0.5 * vec3(h), 1.0);
         }
     </script>
 
@@ -186,7 +186,7 @@
             var sizeX = 256;
             var sizeY = 256;
             var noiseScale = 2.0;
-            var seed = 0;
+            var seed = 92473;
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // create a mesh material from simple texture
