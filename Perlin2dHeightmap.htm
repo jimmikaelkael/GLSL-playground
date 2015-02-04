@@ -1,6 +1,6 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Perlin (Inigo Quilez's variant) render to texture mesh</title>
+        <title>WebGL/GLSL - Perlin 2D heightmap</title>
         <meta charset="utf-8">
     </head>
 
@@ -10,35 +10,14 @@
 
     <script src="js/Three.min.js"></script>
     <script src="js/OrbitControls.js"></script>
-    <script src="js/Prototype.js"></script>
-    <script src="js/NoiseRTT.js"></script>
 
-    <script type="x-shader/x-vertex" id="noiseVertexShader">
+    <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
 
-        varying vec2 v_texCoord2D;
-
-        void main() {
-            gl_Position = vec4(position.xy, 0.0, 1.0);
-            v_texCoord2D = position.xy;
-        }
-    </script>
-
-    <script type="x-shader/x-fragment" id="noiseFragmentShader">
-        // Fragment Shader code
-
-        uniform float seed;
-        uniform vec2 uvScale;
-        uniform vec2 offset;
-
-        varying vec2 v_texCoord2D;
+        varying float noise;
 
         //
-        // GLSL textureless IQ perlin 2D noise "pnoise".
-        //
-        // Pseudo derivatives are applied to noise as per
-        // Inigo Quilez suggested here: http://www.iquilezles.org/www/articles/morenoise/morenoise.htm
-        //
+        // GLSL textureless classic 2D noise "cnoise".
         // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
         // Version: 2011-08-22
         //
@@ -67,7 +46,7 @@
         }
 
         // Classic Perlin noise
-        vec3 pnoise(vec2 P) {
+        float pnoise(vec2 P) {
             vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
             vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
             Pi = mod289(Pi); // To avoid truncation effects in permutation
@@ -76,7 +55,7 @@
             vec4 fx = Pf.xzxz;
             vec4 fy = Pf.yyww;
 
-            vec4 i = permute(permute(ix) + iy) + seed;
+            vec4 i = permute(permute(ix) + iy);
 
             vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
             vec4 gy = abs(gx) - 0.5 ;
@@ -102,29 +81,17 @@
             vec2 fade_xy = fade(Pf.xy);
             vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
             float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
-
-            // get pseudo derivative weights
-            vec2 dw = Pf.xy * Pf.xy * (Pf.xy * (30.0 * Pf.xy - 60.0) + 30.0);
-
-            // calculate pseudo derivates
-            float d_x = dw.x * ((n10 - n00) + (n00 - n10 - n01 + n11) * fade_xy.y);
-            float d_y = dw.y * ((n01 - n00) + (n00 - n10 - n01 + n11) * fade_xy.x);
-
-            return 2.3 * vec3(n_xy, d_x, d_y);
+            return 2.3 * n_xy;
         }
 
-        // fractional brownian motion, also called turbulence
         float fBm(vec2 P, float lacunarity, float gain) {
             float sum = 0.0;
-            vec2 dsum = vec2(0.0);
             float amp = 1.0;
             vec2 pp = P;
 
             // 6 octaves of noise
             for(int i = 0; i < 6; i++) {
-                vec3 n = pnoise(pp);
-                dsum += n.yz;
-                sum += (amp * n.x) / (1.0 + dot(dsum, dsum));
+                sum += amp * pnoise(pp);
                 amp *= gain;
                 pp *= lacunarity;
             }
@@ -132,36 +99,22 @@
         }
 
         void main() {
-            vec2 uv = (v_texCoord2D + offset) * uvScale;
-            float h = fBm(uv, 2.0, 0.5);
-            gl_FragColor = vec4(vec3(0.5 + 0.5 * h), 1.0);
-        }
-    </script>
-
-    <script type="x-shader/x-vertex" id="displayVertexShader">
-        // Vertex Shader code
-
-        uniform sampler2D heightmapTexture;
-        varying float height;
-
-        void main() {
-            // lookup for height on the texture map, taking red channel as height.
-            height = texture2D(heightmapTexture, uv).x;
-            // apply a factor to get displacement
-            float displacement = height * 1500.0;
-            // displace the vertex
-            vec3 newPosition = vec3(position.x, position.y, position.z + displacement);
+            noise = fBm(0.0005 * position.xy, 2.0, 0.5);
+            // displacing vertex on z-axis
+            vec3 newPosition = vec3(position.x, position.y, noise * 768.0);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
         }
     </script>
 
-    <script type="x-shader/x-fragment" id="displayFragmentShader">
+    <script type="x-shader/x-fragment" id="fragmentShader">
         // Fragment Shader code
 
-        varying float height;
+        varying float noise;
 
         void main() {
-            gl_FragColor = vec4(0.0, 0.0, height, 1.0);
+            // modulate a color with the noise like ambient occlusion
+            vec3 color = vec3(0.0, 0.0, 1.0) * (1.0 - noise * -1.0);
+            gl_FragColor = vec4(color.rgb, 1.0);
         }
     </script>
 
@@ -169,25 +122,15 @@
         var container,
             renderer,
             scene,
-            material,
             mesh,
             camera,
             fov = 60,
-            noiseRTT,
             clock = new THREE.Clock();
 
         window.addEventListener('load', function() {
 
             // grab the container from the DOM
             container = document.getElementById("container");
-
-            // create the renderer and attach it to the DOM
-            renderer = new THREE.WebGLRenderer();
-            renderer.setPixelRatio(window.devicePixelRatio);
-            // set a black background color
-            renderer.setClearColor(0);
-
-            container.appendChild(renderer.domElement);
 
             // create a scene
             scene = new THREE.Scene();
@@ -203,7 +146,7 @@
                 1,
                 20000);
             camera.position.y = -4000;
-            camera.position.z = 3500;
+            camera.position.z = 2000;
 
             // controls
             controls = new THREE.OrbitControls(camera);
@@ -213,21 +156,11 @@
             // add the camera to the scene
             scene.add(camera);
 
-            // initialize noiseRTT
-            var sizeX = 256;
-            var sizeY = 256;
-            var noiseScale = 2.0;
-            var seed = 92473;
-            noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
-
             // create a shader material
             material = new THREE.ShaderMaterial({
                 wireframe: true,
-                uniforms: {
-                    heightmapTexture: { type: "t", value: noiseRTT.getTexture() },
-                },
-                vertexShader: document.getElementById('displayVertexShader').textContent,
-                fragmentShader: document.getElementById('displayFragmentShader').textContent
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent
             });
 
             // create a plane mesh and assign the material, then add the mesh to the scene
@@ -236,6 +169,14 @@
                 material
             );
             scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // set a black background color
+            renderer.setClearColor(0);
+
+            container.appendChild(renderer.domElement);
 
             render();
         });
@@ -248,15 +189,7 @@
 
         function render() {
             controls.update(clock.getDelta());
-
-            // render noise to texture
-            renderer.setSize(256, 256);
-            noiseRTT.render(renderer, 0, 0);
-
-            // render scene
-            renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.render(scene, camera);
-
             requestAnimationFrame(render);
         }
     </script>

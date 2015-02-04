@@ -1,6 +1,6 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Domain warping 2d noise rendered to texture</title>
+        <title>WebGL/GLSL - Domain warping (Perlin) 2D noise rendered to texture</title>
         <meta charset="utf-8">
     </head>
 
@@ -173,7 +173,7 @@
             // initialize noiseRTT generator
             var sizeX = 256;
             var sizeY = 256;
-            var noiseScale = 2.0;
+            var noiseScale = 1.0;
             var seed = 12220;
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
