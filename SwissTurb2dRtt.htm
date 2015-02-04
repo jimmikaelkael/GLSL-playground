@@ -37,7 +37,7 @@
         // GLSL textureless IQ perlin 2D noise "pnoise".
         //
         // Pseudo derivatives are applied to noise as per
-        // Inigo Quilez suggested here: http://www.iquilezles.org/www/articles/morenoise/morenoise.htm
+        // Giliam de Carpentier suggested here: http://www.decarpentier.nl/scape-procedural-extensions
         //
         // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
         // Version: 2011-08-22
@@ -103,14 +103,21 @@
             vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
             float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
 
-            // get pseudo derivative weights
-            vec2 dw = Pf.xy * Pf.xy * (Pf.xy * (30.0 * Pf.xy - 60.0) + 30.0);
+            // Get the derivative dw/df
+            vec2 dw = Pf.xy * Pf.xy * (Pf.xy * (Pf.xy * 30.0 - 60.0) + 30.0); // 30f^4 - 60f^3 + 30f^2
+            // Get the derivative d(w*f)/df
+            vec2 dwp = Pf.xy * Pf.xy * Pf.xy * (Pf.xy * (Pf.xy * 36.0 - 75.0) + 40.0); // 36f^5 - 75f^4 + 40f^3
 
-            // calculate pseudo derivates
-            float d_x = dw.x * ((n10 - n00) + (n00 - n10 - n01 + n11) * fade_xy.y);
-            float d_y = dw.y * ((n01 - n00) + (n00 - n10 - n01 + n11) * fade_xy.x);
+            // Calculate the derivatives dn/dx and dn/dy
+            float dx = (g00.x + (g01.x - g00.x) * fade_xy.y) + ((g10.y - g10.x) * Pf.y - g00.y +
+               ((g10.x - g10.y - g11.x + g11.y) * Pf.y + g00.y + g11.x - g01.y - g11.y) * fade_xy.y) *
+               dw.x + ((g00.y - g00.x) + (g00.x - g00.y - g01.x + g01.y) * fade_xy.y) * dwp.x;
+            float dy = (g10.x + (g10.y - g10.x) * fade_xy.x) + ((g01.x - g00.x) * Pf.x - g11.x + ((g00.x -
+               g00.y - g01.x + g01.y) * Pf.x + g00.y + g11.x - g01.y - g11.y) * fade_xy.x) * dw.y +
+               ((g11.x - g10.x) + (g10.x - g10.y - g11.x + g11.y) * fade_xy.x) * dwp.y;
 
-            return 2.3 * vec3(n_xy, d_x, d_y);
+            // Also return the pseudo dn/dx and dn/dy, scaled by the same factor
+            return 2.3 * vec3(n_xy, dx, dy);
         }
 
         // fractional brownian motion, also called turbulence
