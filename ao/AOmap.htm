@@ -1,0 +1,395 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Perlin 2D heightmap rendered to texture</title>
+        <meta charset="utf-8">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../js/Three.min.js"></script>
+    <script src="../js/OrbitControls.js"></script>
+    <script src="../js/Prototype.js"></script>
+    <script src="../js/NoiseRTT.js"></script>
+    <script src="../js/NormalsRTT.js"></script>
+    <script src="../js/AOcclusionRTT.js"></script>
+
+    <script type="x-shader/x-vertex" id="noiseVertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="noiseFragmentShader">
+        // Fragment Shader code
+
+        uniform float seed;
+        uniform vec2 uvScale;
+        uniform vec2 offset;
+
+        //
+        // GLSL textureless classic 2D noise "cnoise".
+        // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
+        // Version: 2011-08-22
+        //
+        // Many thanks to Ian McEwan of Ashima Arts for the
+        // ideas for permutation and gradient selection.
+        //
+        // Copyright (c) 2011 Stefan Gustavson. All rights reserved.
+        // Distributed under the MIT license. See LICENSE file.
+        // https://github.com/ashima/webgl-noise
+        //
+
+        vec4 mod289(vec4 x) {
+            return x - floor(x * (1.0 / 289.0)) * 289.0;
+        }
+
+        vec4 permute(vec4 x) {
+            return mod289(((x*34.0)+1.0)*x);
+        }
+
+        vec4 taylorInvSqrt(vec4 r) {
+            return 1.79284291400159 - 0.85373472095314 * r;
+        }
+
+        vec2 fade(vec2 t) {
+            return t*t*t*(t*(t*6.0-15.0)+10.0);
+        }
+
+        // Classic Perlin noise
+        float pnoise(vec2 P) {
+            vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
+            vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
+            Pi = mod289(Pi); // To avoid truncation effects in permutation
+            vec4 ix = Pi.xzxz;
+            vec4 iy = Pi.yyww;
+            vec4 fx = Pf.xzxz;
+            vec4 fy = Pf.yyww;
+
+            vec4 i = permute(permute(ix) + iy) + seed;
+
+            vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
+            vec4 gy = abs(gx) - 0.5 ;
+            vec4 tx = floor(gx + 0.5);
+            gx = gx - tx;
+
+            vec2 g00 = vec2(gx.x,gy.x);
+            vec2 g10 = vec2(gx.y,gy.y);
+            vec2 g01 = vec2(gx.z,gy.z);
+            vec2 g11 = vec2(gx.w,gy.w);
+
+            vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
+            g00 *= norm.x;
+            g01 *= norm.y;
+            g10 *= norm.z;
+            g11 *= norm.w;
+
+            float n00 = dot(g00, vec2(fx.x, fy.x));
+            float n10 = dot(g10, vec2(fx.y, fy.y));
+            float n01 = dot(g01, vec2(fx.z, fy.z));
+            float n11 = dot(g11, vec2(fx.w, fy.w));
+
+            vec2 fade_xy = fade(Pf.xy);
+            vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
+            float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
+            return 2.3 * n_xy;
+        }
+
+        // fractional brownian motion, also called turbulence
+        float fBm(vec2 v, float lacunarity, float gain) {
+            float sum = 0.0;
+            float amp = 1.0;
+            vec2 V = v;
+
+            // 6 octaves of noise
+            for(int i = 0; i < 6; i++) {
+                sum += amp * pnoise(V);
+                amp *= gain;
+                V *= lacunarity;
+            }
+            return sum;
+        }
+
+        void main() {
+            vec2 uv = (gl_FragCoord.xy + offset) * uvScale;
+            float h = fBm(uv, 2.0, 0.5);
+            gl_FragColor = vec4(vec3(0.0), 0.5 + 0.4 * h);
+        }
+    </script>
+
+    <script type="x-shader/x-vertex" id="normalVertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="normalFragmentShader">
+        // Fragment Shader code
+
+        uniform sampler2D heightmapTexture;
+        uniform vec2 uvScale;
+
+        // This can be used to control how pronounced the bumps are:
+        // less than 1.0 smoothes and greater than 1.0 enhances.
+        uniform float strength;
+
+        float getHeight(float x, float y) {
+            vec2 uv = (gl_FragCoord.xy + vec2(x, y)) * uvScale;
+            return texture2D(heightmapTexture, uv).a;
+        }
+
+        void main() {
+            // Using Sobel operator to generate normal:
+            // http://en.wikipedia.org/wiki/Sobel_operator
+            // The sobel filter requires the eight samples surrounding the current
+            // pixel (like moore neighborhood).
+            float tl = getHeight(-1.0, -1.0);   // top left
+            float  l = getHeight(-1.0,  0.0);   // left
+            float bl = getHeight(-1.0,  1.0);   // bottom left
+            float  t = getHeight( 0.0, -1.0);   // top
+            float  b = getHeight( 0.0,  1.0);   // bottom
+            float tr = getHeight( 1.0, -1.0);   // top right
+            float  r = getHeight( 1.0,  0.0);   // right
+            float br = getHeight( 1.0,  1.0);   // bottom right
+
+            // Compute dx using Sobel, X kernel is:
+            //   [ -1  0  1 ]
+            //   [ -2  0  2 ]
+            //   [ -1  0  1 ]
+            float dX = tr + 2.0 * r + br - tl - 2.0 * l - bl;
+
+            // Compute dy using Sobel, Y kernel is:
+            //   [ -1 -2 -1 ]
+            //   [  0  0  0 ]
+            //   [  1  2  1 ]
+            float dY = bl + 2.0 * b + br - tl - 2.0 * t - tr;
+
+            // Generate the missing Z component - tangent space normals are +Z which
+            // makes things easier.
+            float dZ = sqrt(1.0 - dX * dX - dY * dY) / strength;
+
+            // Stores normals in rgb and height in alpha
+            gl_FragColor = vec4(normalize(vec3(dX, dY, dZ)) * 0.5 + 0.5, getHeight(0.0, 0.0));
+        }
+    </script>
+
+    <script type="x-shader/x-vertex" id="aocclusionVertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="aocclusionFragmentShader">
+        // Fragment Shader code
+
+        uniform sampler2D normalsTexture;
+        uniform vec2 uvScale;
+
+        // The sampling kernel
+        uniform vec2 kernel[32];
+        // The kernel sample radius
+        uniform float kernelRadius;
+        // Occluder bias to minimize self-occlusion.
+        uniform float occluderBias;
+
+        vec3 getSample(vec2 pos) {
+            vec2 uv = (gl_FragCoord.xy + pos) * uvScale;
+            float height = texture2D(normalsTexture, uv).a;
+            return vec3(uv.x, uv.y, height * 2.0 - 1.0);
+        }
+
+        void main() {
+            // We need to construct a change-of-basis matrix to reorient our sample kernel
+            // along the origin's normal.
+            // Uses Gram-Schmidt process (http://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process)
+            // to compute an orthogonal basis (TBN).
+            vec3 normal = normalize(texture2D(normalsTexture, gl_FragCoord.xy * uvScale).xyz * 2.0 - 1.0);
+            vec3 tangent = normalize(cross(normal, vec3(0.0, 0.0, 1.0)));
+            vec3 bitangent = normalize(cross(normal, tangent));
+            mat3 TBN = mat3(tangent, bitangent, normal);
+
+            float occlusion = 0.0;
+            // Get the position for this fragment
+            vec3 origin = getSample(vec2(0.0));
+            for(int i = 0; i < 32; i++) {
+                // Get a sample around the fragment using the kernel
+                vec3 sample = getSample(vec2(TBN * vec3(kernel[i], 0.0) * kernelRadius));
+                vec3 direction = sample - origin;
+                // Calculate ambient occlusion amount between these two points
+                // It is simular to diffuse lighting. Objects closer to the fragment cast
+                // the hardest shadow and objects closer to the horizon have minimal effect.
+                float intensity = max(dot(normal, normalize(direction)) - occluderBias, 0.0);
+                // Attenuate the occlusion, similar to how you attenuate a light source.
+                // The further the distance between points, the less effect AO has on the fragment.
+                float attenuation = 0.23 / sqrt(length(direction));
+                occlusion += intensity * attenuation;
+            }
+            // Average and clamp ambient occlusion
+            occlusion = clamp(occlusion / 32.0, 0.0, 1.0);
+            gl_FragColor = vec4(vec3(0.0), 1.0 - occlusion);
+        }
+    </script>
+
+    <script type="x-shader/x-vertex" id="displayVertexShader">
+        // Vertex Shader code
+
+        uniform sampler2D normalsTexture;
+        uniform sampler2D aocclusionTexture;
+        varying float h;
+        varying vec3 n;
+        varying float o;
+
+        void main() {
+            // lookup for height on the normal texture, taking alpha channel.
+            h = texture2D(normalsTexture, uv).a;
+
+            // lookup for normal on the normal texture.
+            n = texture2D(normalsTexture, uv).xyz;
+
+            // lookup for AO on the occlusion texture, taking alpha channel.
+            o = texture2D(aocclusionTexture, uv).a;
+
+            // apply a factor to get displacement
+            float displacement = h * 1500.0;
+            // displace the vertex
+            vec3 newPosition = vec3(position.x, position.y, position.z + displacement);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="displayFragmentShader">
+        // Fragment Shader code
+
+        varying float h;
+        varying vec3 n;
+        varying float o;
+
+        void main() {
+            //gl_FragColor = vec4(0.0, 0.0, h, 1.0);
+            //gl_FragColor = vec4(n, 1.0);
+            gl_FragColor = vec4(vec3(o), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            material,
+            mesh,
+            camera,
+            fov = 60,
+            noiseRTT,
+            normalsRTT,
+            aocclusionRTT,
+            clock = new THREE.Clock();
+
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create the renderer and attach it to the DOM
+            renderer = new THREE.WebGLRenderer({
+                alpha: true,
+                antialias:true
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            // set a black background color
+            renderer.setClearColor(0);
+
+            container.appendChild(renderer.domElement);
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create axis helpers and add them to the scene
+            var axes = new THREE.AxisHelper(200);
+            scene.add(axes);
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                fov,
+                window.innerWidth / window.innerHeight,
+                1,
+                20000);
+            camera.position.y = -4000;
+            camera.position.z = 3500;
+
+            // controls
+            controls = new THREE.OrbitControls(camera);
+            controls.center.set(0.0, 100.0, 0.0);
+            controls.userPanSpeed = 100;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // initialize noiseRTT
+            var sizeX = 256;
+            var sizeY = 256;
+            var noiseScale = 1.0 / 64.0;
+            var seed = 421;
+            noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
+
+            // initialize normalsRTT
+            normalsRTT = new NormalsRTT(sizeX, sizeY, 2.0, noiseRTT.getTexture());
+
+            // initialize aocclusionRTT
+            aocclusionRTT = new AOcclusionRTT(sizeX, sizeY, 10.0, 0.1, normalsRTT.getTexture());
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                //wireframe: true,
+                uniforms: {
+                    normalsTexture: { type: "t", value: normalsRTT.getTexture() },
+                    aocclusionTexture: { type: "t", value: aocclusionRTT.getTexture() }
+                },
+                vertexShader: document.getElementById('displayVertexShader').textContent,
+                fragmentShader: document.getElementById('displayFragmentShader').textContent
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(6000, 6000, 256, 256),
+                material
+            );
+            scene.add(mesh);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+        }
+
+        function render() {
+            controls.update(clock.getDelta());
+
+            // render noise to texture
+            renderer.setSize(256, 256);
+            noiseRTT.render(renderer, 0, 0);
+
+            // render normals and height to texture
+            normalsRTT.render(renderer, 0, 0);
+
+            // render ambient occlusion to texture
+            aocclusionRTT.render(renderer, 0, 0);
+
+            // render scene
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.render(scene, camera);
+
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
