@@ -31,7 +31,12 @@
         uniform vec2 offset;
 
         //
-        // GLSL textureless classic 2D noise "cnoise".
+        // GLSL textureless IQ perlin 2D noise "pnoise".
+        //
+        // Pseudo derivatives are applied to noise as per
+        // Inigo Quilez suggested here: http://www.iquilezles.org/www/articles/morenoise/morenoise.htm        
+        // Giliam de Carpentier suggested here: http://www.decarpentier.nl/scape-procedural-extensions
+        //
         // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
         // Version: 2011-08-22
         //
@@ -60,7 +65,7 @@
         }
 
         // Classic Perlin noise
-        float pnoise(vec2 P) {
+        vec3 pnoise(vec2 P) {
             vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
             vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
             Pi = mod289(Pi); // To avoid truncation effects in permutation
@@ -95,28 +100,42 @@
             vec2 fade_xy = fade(Pf.xy);
             vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
             float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
-            return 2.3 * n_xy;
+
+            // get pseudo derivative weights
+            vec2 dw = Pf.xy * Pf.xy * (Pf.xy * (30.0 * Pf.xy - 60.0) + 30.0);
+            vec2 dwp = Pf.xy * Pf.xy * Pf.xy * (Pf.xy * (36.0 * Pf.xy - 75.0) + 40.0);
+
+            // calculate pseudo derivates
+            float d_x = dw.x * ((n10 - n00) + (n00 - n10 - n01 + n11) * fade_xy.y) * dwp.x;
+            float d_y = dw.y * ((n01 - n00) + (n00 - n10 - n01 + n11) * fade_xy.x) * dwp.y;
+
+            // Also return the pseudo dn/dx and dn/dy, scaled by the same factor
+            return 2.3 * vec3(n_xy, d_x, d_y);
         }
 
         // fractional brownian motion, also called turbulence
-        float fBm(vec2 v, float lacunarity, float gain) {
+        float fBm(vec2 P, float lacunarity, float gain) {
+            float warp = 0.15;
             float sum = 0.0;
+            vec2 dsum = vec2(0.0);
             float amp = 1.0;
-            vec2 V = v;
+            vec2 pp = P;
 
             // 6 octaves of noise
             for(int i = 0; i < 6; i++) {
-                sum += amp * pnoise(V);
-                amp *= gain;
-                V *= lacunarity;
+                vec3 n = pnoise(pp + warp * dsum);
+                sum += (amp * (1.0 - abs(n.x)));
+                dsum += amp * n.yz * -n.x;
+                amp *= gain * clamp(sum, 0.0, 1.0);
+                pp *= lacunarity;
             }
             return sum;
         }
 
         void main() {
             vec2 uv = (gl_FragCoord.xy + offset) * uvScale;
-            float h = fBm(uv, 2.0, 0.5);
-            gl_FragColor = vec4(vec3(0.0), 0.5 + 0.4 * h);
+            float h = fBm(uv, 2.0, 0.6);
+            gl_FragColor = vec4(vec3(0.0), 0.33 * h);
         }
     </script>
 
@@ -351,7 +370,7 @@
             var sizeX = 256;
             var sizeY = 256;
             var noiseScale = 1.0 / 64.0;
-            var seed = 421;
+            var seed = 92473;
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // initialize normalsRTT
