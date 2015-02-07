@@ -16,11 +16,8 @@
     <script type="x-shader/x-vertex" id="noiseVertexShader">
         // Vertex Shader code
 
-        varying vec2 v_texCoord2D;
-
         void main() {
             gl_Position = vec4(position.xy, 0.0, 1.0);
-            v_texCoord2D = position.xy;
         }
     </script>
 
@@ -30,8 +27,6 @@
         uniform float seed;
         uniform vec2 uvScale;
         uniform vec2 offset;
-
-        varying vec2 v_texCoord2D;
 
         //
         // GLSL textureless classic 2D noise "cnoise".
@@ -117,7 +112,7 @@
         }
 
         void main() {
-            vec2 uv = (v_texCoord2D + offset) * uvScale;
+            vec2 uv = (gl_FragCoord.xy + offset) * uvScale;
             float h = fBm(uv + 0.5 * fBm(uv + vec2(8.5, 2.7) + 1.0 * fBm(uv + vec2(4.6, 6.9), 2.0, 0.5), 2.0, 0.5), 2.0, 0.5);
             gl_FragColor = vec4(vec3(0.5 + 0.5 * h), 1.0);
         }
@@ -201,7 +196,7 @@
             // initialize noiseRTT
             var sizeX = 256;
             var sizeY = 256;
-            var noiseScale = 1.0;
+            var noiseScale = 1.0 / 128.0;
             var seed = 654321;
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 

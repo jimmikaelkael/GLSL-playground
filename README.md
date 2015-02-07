@@ -8,7 +8,7 @@ possible.
 
 Here's what have been done already:
  - height mapping (with procedural noise texture)
- - normal mapping (Sobel Operator)
+ - normal mapping (Sobel operator)
  - ambient occlusion (not SSAO, but rather based on heightmap)
 
 The demos are using three.js, a JavaScript 3D Library which makes WebGL simpler:
