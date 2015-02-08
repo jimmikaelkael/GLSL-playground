@@ -169,9 +169,8 @@
             //   [  1  2  1 ]
             float dY = bl + 2.0 * b + br - tl - 2.0 * t - tr;
 
-            // Generate the missing Z component - tangent space normals are +Z which
-            // makes things easier.
-            float dZ = sqrt(1.0 - dX * dX - dY * dY) / strength;
+            // Generate the missing Z component: G = sqrt(dx^2 + dy^2)
+            float dZ = sqrt(dX * dX + dY * dY) / strength;
 
             // Stores normals in rgb and height in alpha
             gl_FragColor = vec4(normalize(vec3(dX, dY, dZ)) * 0.5 + 0.5, getHeight(0.0, 0.0));
@@ -273,7 +272,7 @@
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // initialize normalsRTT
-            var strength = 2.0;
+            var strength = 1.0;
             normalsRTT = new NormalsRTT(sizeX, sizeY, strength, noiseRTT.getTexture());
 
             // create a shader material
