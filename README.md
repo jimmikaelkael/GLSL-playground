@@ -7,8 +7,8 @@ generation demos using only a minimal texture set and using procedural textures 
 possible.
 
 Here's what have been done already:
- - height mapping (with procedural noise texture)
- - normal mapping (Sobel operator)
+ - height mapping (with procedural noise texture, Perlin, Simplex, etc...)
+ - normal mapping (Sobel and Scharr operator)
  - ambient occlusion (not SSAO, but rather based on heightmap)
 
 The demos are using three.js, a JavaScript 3D Library which makes WebGL simpler:
