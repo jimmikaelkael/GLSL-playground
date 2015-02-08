@@ -159,8 +159,8 @@
         }
 
         void main() {
-            // Using Sobel operator to generate normal:
-            // http://en.wikipedia.org/wiki/Sobel_operator
+            // Using Scharr operator to generate normal which is an improvement:
+            // of Sobel operator: http://en.wikipedia.org/wiki/Sobel_operator
             // The sobel filter requires the eight samples surrounding the current
             // pixel (like moore neighborhood).
             float tl = getHeight(-1.0, -1.0);   // top left
@@ -172,21 +172,20 @@
             float  r = getHeight( 1.0,  0.0);   // right
             float br = getHeight( 1.0,  1.0);   // bottom right
 
-            // Compute dx using Sobel, X kernel is:
-            //   [ -1  0  1 ]
-            //   [ -2  0  2 ]
-            //   [ -1  0  1 ]
-            float dX = tr + 2.0 * r + br - tl - 2.0 * l - bl;
+            // Compute dx using Scharr, X kernel is:
+            //   [ - 3 0  3 ]
+            //   [ -10 0 10 ]
+            //   [ - 3 0  3 ]
+            float dX = 3.0 * tr + 10.0 * r + 3.0 * br - 3.0 * tl - 10.0 * l - 3.0 * bl;
 
-            // Compute dy using Sobel, Y kernel is:
-            //   [ -1 -2 -1 ]
-            //   [  0  0  0 ]
-            //   [  1  2  1 ]
-            float dY = bl + 2.0 * b + br - tl - 2.0 * t - tr;
+            // Compute dy using Scharr, Y kernel is:
+            //   [ -3 -10 -3 ]
+            //   [  0   0  0 ]
+            //   [  3  10  3 ]
+            float dY = 3.0 * bl + 10.0 * b + 3.0 * br - 3.0 * tl - 10.0 * t - 3.0 * tr;
 
-            // Generate the missing Z component - tangent space normals are +Z which
-            // makes things easier.
-            float dZ = sqrt(1.0 - dX * dX - dY * dY) / strength;
+            // Generate the missing Z component: G = sqrt(dx^2 + dy^2)
+            float dZ = sqrt(dX * dX + dY * dY) / strength;
 
             // Stores normals in rgb and height in alpha
             gl_FragColor = vec4(normalize(vec3(dX, dY, dZ)) * 0.5 + 0.5, getHeight(0.0, 0.0));
@@ -259,7 +258,7 @@
                 float lambert = max(0.0, dot(normal, normalize(lightDirection)) - occluderBias);
                 // Attenuate the occlusion, similar to how you attenuate a light source.
                 // The further the distance between points, the less effect AO has on the fragment.
-                float attenuation = 0.23 / sqrt(length(lightDirection));
+                float attenuation = 0.25 / sqrt(length(lightDirection));
                 occlusion += lambert * attenuation;
             }
             // Average and clamp ambient occlusion
@@ -370,10 +369,10 @@
             noiseRTT = new NoiseRTT(sizeX, sizeY, noiseScale, seed);
 
             // initialize normalsRTT
-            normalsRTT = new NormalsRTT(sizeX, sizeY, 2.0, noiseRTT.getTexture());
+            normalsRTT = new NormalsRTT(sizeX, sizeY, 1.0, noiseRTT.getTexture());
 
             // initialize aocclusionRTT
-            aocclusionRTT = new AOcclusionRTT(sizeX, sizeY, 10.0, 0.1, normalsRTT.getTexture());
+            aocclusionRTT = new AOcclusionRTT(sizeX, sizeY, 10.0, 0.05, normalsRTT.getTexture());
 
             // create a shader material
             material = new THREE.ShaderMaterial({
