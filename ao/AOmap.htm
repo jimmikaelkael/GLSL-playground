@@ -1,7 +1,8 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Perlin 2D heightmap rendered to texture</title>
+        <title>WebGL/GLSL - Ambient Occlusion (Perlin 2D heightmap)</title>
         <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../css/styles.css">
     </head>
 
     <body>
@@ -9,6 +10,7 @@
     </body>
 
     <script src="../js/Three.min.js"></script>
+    <script src="../js/Detector.js"></script>
     <script src="../js/OrbitControls.js"></script>
     <script src="../js/Prototype.js"></script>
     <script src="../js/NoiseRTT.js"></script>
@@ -306,16 +308,20 @@
             aocclusionRTT,
             clock = new THREE.Clock();
 
+        window.addEventListener('resize', onWindowResize, false);
         window.addEventListener('load', function() {
 
             // grab the container from the DOM
             container = document.getElementById("container");
 
             // create the renderer and attach it to the DOM
-            renderer = new THREE.WebGLRenderer({
-                alpha: true,
-                antialias:true
-            });
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
             renderer.setPixelRatio(window.devicePixelRatio);
             // set a black background color
             renderer.setClearColor(0);

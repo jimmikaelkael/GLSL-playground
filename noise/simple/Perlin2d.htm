@@ -2,6 +2,7 @@
     <head>
         <title>WebGL/GLSL - Perlin 2D mesh</title>
         <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
@@ -9,6 +10,7 @@
     </body>
 
     <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
     <script src="../../js/OrbitControls.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
@@ -127,6 +129,7 @@
             fov = 60,
             clock = new THREE.Clock();
 
+        window.addEventListener('resize', onWindowResize, false);
         window.addEventListener('load', function() {
 
             // grab the container from the DOM
@@ -166,7 +169,13 @@
             scene.add(mesh);
 
             // create the renderer and attach it to the DOM
-            renderer = new THREE.WebGLRenderer();
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
             renderer.setSize(window.innerWidth, window.innerHeight);
             // set a black background color
             renderer.setClearColor(0);
