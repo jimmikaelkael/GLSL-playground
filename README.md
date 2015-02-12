@@ -11,6 +11,7 @@ Here's what have been done already:
  - normal mapping (Sobel and Scharr operator)
  - ambient occlusion (not SSAO, but rather based on heightmap)
  - lighting (spherical harmonics)
+ - skybox (cube map)
  - simple pixel shader demo (full screen quad)
 
 The demos are using three.js, a JavaScript 3D Library which makes WebGL simpler:
