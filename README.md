@@ -12,7 +12,7 @@ Here's what have been done already:
  - ambient occlusion (not SSAO, but rather based on heightmap)
  - lighting (spherical harmonics)
  - skybox (cube and sphere map)
- - simple pixel shader demo (full screen quad)
+ - pixel shader demos (full screen quad geometry)
 
 The demos are using three.js, a JavaScript 3D Library which makes WebGL simpler:
 http://threejs.org
