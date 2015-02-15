@@ -1,23 +1,8 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Pixel Shader</title>
+        <title>WebGL/GLSL - Base Pixel Shader</title>
         <meta charset="utf-8">
-        <style>
-            body {
-                margin :0;
-            }
-            canvas {
-                width: 100%;
-                height: 100%;
-                background: #000;
-                display: block; /* fix necessary to remove space at bottom of canvas */
-            }
-            #container {
-                background: #000;
-                width: 100%;
-                height: 100%;
-            }
-        </style>
+        <link rel="stylesheet" type="text/css" href="../css/styles.css">
     </head>
 
     <body>
@@ -38,14 +23,13 @@
     <script type="x-shader/x-fragment" id="fragmentShader">
         // Fragment Shader code
 
-        uniform vec2 iResolution;
-        uniform float iGlobalTime;
-        uniform vec4 iMouse;
-        uniform vec4 iDate;
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
 
         void main() {
-            vec2 uv = gl_FragCoord.xy / iResolution.xy;
-            gl_FragColor = vec4(uv, 0.5 + 0.5 * sin(iGlobalTime), 1.0);
+            vec2 uv = gl_FragCoord.xy / uResolution.xy;
+            gl_FragColor = vec4(uv, 0.5 + 0.5 * sin(uGlobalTime), 1.0);
         }
     </script>
 
@@ -81,10 +65,9 @@
             // create a shader material
             material = new THREE.ShaderMaterial({
                 uniforms: {
-                    iResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-                    iGlobalTime: { type:"f", value: 1.0 },
-                    iMouse: { type:"v4", value: new THREE.Vector4(window.innerWidth / 2, window.innerHeight / 2, 0, 0) },
-                    iDate: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) }
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(window.innerWidth / 2, window.innerHeight / 2, 0, 0) }
                 },
                 vertexShader: document.getElementById('vertexShader').textContent,
                 fragmentShader: document.getElementById('fragmentShader').textContent,
@@ -118,13 +101,14 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
         }
 
         function onMouseDown(e) {
             if (e.button === 0) {
                 leftMouseButtonDown = true;
             }
-            var vec4Mouse = material.uniforms["iMouse"].value;
+            var vec4Mouse = material.uniforms["uMouse"].value;
             vec4Mouse.z = e.clientX;
             vec4Mouse.w = e.clientY;
         }
@@ -133,27 +117,21 @@
             if (e.button === 0) {
                 leftMouseButtonDown = false;
             }
-            var vec4Mouse = material.uniforms["iMouse"].value;
+            var vec4Mouse = material.uniforms["uMouse"].value;
             vec4Mouse.z = 0.0;
             vec4Mouse.w = 0.0;
         }
 
         function onMouseMove(e) {
             if (leftMouseButtonDown === true) {
-                var vec4Mouse = material.uniforms["iMouse"].value;
+                var vec4Mouse = material.uniforms["uMouse"].value;
                 vec4Mouse.x = e.clientX;
                 vec4Mouse.y = e.clientY;
             }
         }
 
         function render() {
-            material.uniforms["iGlobalTime"].value = clock.getElapsedTime();
-            var d = new Date();
-            var vec4Date = material.uniforms["iDate"].value;
-            vec4Date.x = d.getFullYear();
-            vec4Date.y = d.getMonth();
-            vec4Date.z = d.getDay();
-            vec4Date.w = d.getSeconds();
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
 
             renderer.render(scene, camera);
             requestAnimationFrame(render);
