@@ -29,13 +29,16 @@
         uniform sampler2D uTexture0;
         uniform sampler2D uTexture1;
 
-        vec3 sunColor = vec3(1.8, 1.2, 0.9);
+        vec3 sunColor = vec3(1.8, 1.0, 0.5);
         vec3 skyColor = vec3(0.4, 0.6, 0.75);
-        vec3 diffuseColor = vec3(0.4, 0.5, 0.6);
+        vec3 sunDiffuseColor = vec3(1.0, 0.8, 0.5);
+        vec3 skyDiffuseColor = vec3(0.2, 0.3, 0.4);
         vec3 cloudsColor = vec3(1.0, 1.0, 1.0);
-        vec3 fogColor = vec3(0.7, 0.75, 0.8);
+        vec3 horizonColor = vec3(0.7, 0.75, 0.8);
+        vec3 fogColorB = vec3(0.7, 0.8, 0.9);
+        vec3 fogColorR = vec3(0.8, 0.7, 0.6);
 
-        vec3 sunDirection = normalize(vec3(0.7, 0.75, 1.0));
+        vec3 sunDirection = normalize(vec3(0.7, 0.25, 1.0));
 
         float cloudsHeight = 800.0;
         float cloudsDensity = 0.3;
@@ -78,48 +81,71 @@
             // terrain marching as explained by Inigo Quilez in his articles:
             // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
             float t = tmin;
-            for (int i = 0; i < 250; i++) {
+            for (int i = 0; i < 300; i++) {
                 vec3 p = ro + rd * t;
-		float h = p.y - fBm(p.xz);
-		if (h < (0.001 * t) || t > tmax)
+                float h = p.y - fBm(p.xz);
+                if (h < (0.001 * t) || t > tmax)
                     break;
-		t += 0.2 * h;
+                t += 0.2 * h;
             }
             return t;
+        }
+
+        vec3 getTerrainNormal(in vec3 p, float t) {
+            // computes terrain normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            float eps = 0.025;
+            return normalize(vec3(fBm(vec2(p.x - eps, p.z)) - fBm(vec2(p.x + eps, p.z)),
+                                  2.0 * eps,
+                                  fBm(vec2(p.x, p.z - eps)) - fBm(vec2(p.x, p.z + eps))));
         }
 
         void main() {
             vec2 p = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
             vec3 norm = normalize(vec3(p.xy, 1.0));
 
-            vec3 ro = vec3(1.0 + cos(uGlobalTime * 0.1) * 1.0, 1.5 + sin(uGlobalTime * 0.05) * 0.5 - 0.15, 1.0 + uGlobalTime * 0.5);
+            vec3 ro = vec3(1.0 + cos(uGlobalTime * 0.1) * 1.0, 1.75 + sin(uGlobalTime * 0.1) * 0.5 - 0.15, 1.0 + uGlobalTime * 0.5);
             vec3 rd = norm;
+
+            float sun = clamp(dot(sunDirection, norm), 0.0, 1.0);
 
             // terrain marching
             float tmin = 0.1;
-            float tmax = 65.0;
+            float tmax = 50.0;
             float t = intersect(ro, rd, tmin, tmax);
             vec3 color;
             if (t < tmax) {
                 // get position where the ray has hit
-                vec3 pos = ro + rd * t;
+                vec3 tpos = ro + rd * t;
+                // get terrain normal at that position
+                vec3 tnorm = getTerrainNormal(tpos, t);
 
+                // 3 lights rig as explained by Inigo Quilez in outdoor lighting article:
+                // http://www.iquilezles.org/www/articles/outdoorslighting/outdoorslighting.htm
                 // light from sun direction
-                float diffuse = clamp(dot(sunDirection, norm), 0.0, 1.0);
+                float diffuse = clamp(0.2 + 0.8 * dot(sunDirection, tnorm), 0.0, 1.0);
+                // indirect light reflected back in opposite direction of the sun
+                float diffuseBack = clamp(0.1 + 0.8 * dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), tnorm), 0.0, 1.0);
+                // compute light color
+                vec3 lightColor = 1.5 * diffuse * sunDiffuseColor;  // sunlight
+                lightColor += 0.75 * skyDiffuseColor;               // skylight
+                lightColor += 0.25 * diffuseBack * skyDiffuseColor; // backlight
 
                 // rock
-                color = 0.3 * texture2D(uTexture1, pos.xz * 0.75, 0.0 - maxmipmap).rgb;
-                color += 0.05 * diffuse * diffuseColor;
+                color = 0.5 * texture2D(uTexture1, tpos.xz * 0.75, 0.0 - maxmipmap).rgb;
+                color *= 0.7 * lightColor;
 
-                // fog
-                color = mix(color, fogColor, 1.0 - exp(-0.0015 * t * t));
+                // fog: mixes a blue fog, and a red fog with sun amount
+                // this is described by IQ in his "Better Fog" article:
+                // http://www.iquilezles.org/www/articles/fog/fog.htm
+                vec3 fogColor = mix(fogColorB, fogColorR, pow(sun, 4.0));
+                color = mix(color, 0.8 * fogColor, 1.0 - exp(-0.001 * t * t));
 
             } else {
                 // sky and sun
-                float sky = clamp(0.8 * (1.0 - 0.8 * norm.y), 0.0, 1.0);
-                float sun = clamp(dot(sunDirection, norm), 0.0, 1.0);
+                float sky = clamp(0.6 * (1.0 - 0.8 * norm.y), 0.0, 1.0);
                 float diffuse = clamp(0.4 * sun, 0.0, 1.0);
-                color = sky * skyColor + pow(sun, 1200.0) * sunColor + diffuse * diffuseColor;
+                color = sky * skyColor + pow(sun, 500.0) * sunColor + diffuse * skyDiffuseColor;
 
                 // clouds
                 t = (cloudsHeight - ro.y) / rd.y;
@@ -127,11 +153,11 @@
                     vec3 pos = ro + rd * t;
                     pos.z += uGlobalTime * 10.0;
                     float clouds = fBmC(0.0025 * pos.xz) * cloudsDensity + cloudsCover;
-		    color = mix(color, mix(cloudsColor * 1.1, sunColor + diffuse * diffuseColor, 0.25), 0.8 * smoothstep(0.1, 0.9, clouds));
+                    color = mix(color, mix(cloudsColor * 1.1, sunColor + diffuse * sunDiffuseColor, 0.25), 0.8 * smoothstep(0.1, 0.9, clouds));
                 }
 
-                // fog
-                color = mix(color, fogColor, pow(1.0 - rd.y, 4.0));
+                // horizon
+                color = mix(color, horizonColor, pow(1.0 - rd.y, 4.0));
             }
 
             // gamma correction
