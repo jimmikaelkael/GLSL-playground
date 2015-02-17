@@ -124,11 +124,13 @@
                 // http://www.iquilezles.org/www/articles/outdoorslighting/outdoorslighting.htm
                 // light from sun direction
                 float diffuse = clamp(0.2 + 0.8 * dot(sunDirection, tnorm), 0.0, 1.0);
+                // light from skydome
+                float sky = clamp(0.2 + 0.8 * dot(normalize(vec3(0.5 + 0.5 * tnorm.y, 0.0, 1.0)), norm), 0.0, 1.0);
                 // indirect light reflected back in opposite direction of the sun
                 float diffuseBack = clamp(0.1 + 0.8 * dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), tnorm), 0.0, 1.0);
                 // compute light color
                 vec3 lightColor = 1.5 * diffuse * sunDiffuseColor;  // sunlight
-                lightColor += 0.75 * skyDiffuseColor;               // skylight
+                lightColor += 0.5 * sky * skyDiffuseColor;         // skylight
                 lightColor += 0.25 * diffuseBack * skyDiffuseColor; // backlight
 
                 // rock
