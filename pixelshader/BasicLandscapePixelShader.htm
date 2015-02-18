@@ -31,9 +31,9 @@
 
         vec3 sunColor = vec3(1.8, 1.0, 0.6);
         vec3 skyColor = vec3(0.4, 0.6, 0.75);
-        vec3 sunDiffuseColor = vec3(1.0, 0.8, 0.5);
-        vec3 skyDiffuseColor = vec3(0.2, 0.3, 0.4);
-        vec3 indDiffuseColor = vec3(0.5, 0.35, 0.25);
+        vec3 sunLightColor = vec3(1.7, 1.25, 0.9);
+        vec3 skyLightColor = vec3(0.15, 0.2, 0.3);
+        vec3 indLightColor = vec3(0.4, 0.3, 0.2);
         vec3 cloudsColor = vec3(1.0, 1.0, 1.0);
         vec3 horizonColor = vec3(0.7, 0.75, 0.8);
         vec3 fogColorB = vec3(0.7, 0.8, 0.9);
@@ -105,17 +105,17 @@
             // penumbra shadows as described by IQ in article "free penumbra shadows
             // for raymarching distance fields":
             // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
-            float res = 1.0;
+            float sh = 1.0;
             float t = tmin;
             for(int i = 0; i < 50; i++) {
                 vec3 p = ro + rd * t;
                 float h = p.y - fBm(p.xz);
-                res = min(res, 8.0 * h / t);
+                sh = min(sh, 8.0 * h / t);
                 t += 0.5 * h;
                 if (h < (0.001 * t) || t > tmax)
                     break;
             }
-            return clamp(res, 0.0, 1.0);
+            return sh;
         }
 
         void main() {
@@ -147,28 +147,28 @@
                 // indirect light reflected back in opposite direction of the sun
                 float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), tnorm), 0.0, 1.0);
                 // raymarching penumbra shadows
-                float shadow = rayMarchShadow(tpos, sunDirection, 0.5, 50.0);
+                float shadow = clamp(rayMarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
                 // compute light color
-                vec3 lightColor = 1.5 * sun * sunDiffuseColor;        // sunlight
-                lightColor *= pow(vec3(shadow), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
-                lightColor += 0.6 * sky * skyDiffuseColor;            // add skylight
-                lightColor += 0.3 * ind * indDiffuseColor;            // add backlight
+                vec3 lightColor = 1.2 * sun * sunLightColor;    // sunlight
+                lightColor *= pow(vec3(shadow), sunLightColor); // multiply sunlight by penumbra shadows
+                lightColor += 0.7 * sky * skyLightColor;        // add skylight
+                lightColor += 0.3 * ind * indLightColor;        // add backlight
 
                 // rock
-                color = 0.5 * texture2D(uTexture1, tpos.xz, 0.0 - maxmipmap).rgb;
-                color *= 1.0 * lightColor;
+                color = 0.2 * texture2D(uTexture1, tpos.xz, 0.0 - maxmipmap).rgb;
+                color *= 1.25 * lightColor;
 
                 // fog: mixes a blue fog, and a red fog with sun amount
                 // this is described by IQ in his "Better Fog" article:
                 // http://www.iquilezles.org/www/articles/fog/fog.htm
                 vec3 fogColor = mix(fogColorB, fogColorR, pow(sunDot, 4.0));
-                color = mix(color, 0.8 * fogColor, 1.0 - exp(-0.0009 * t * t));
+                color = mix(color, 0.8 * fogColor, 1.0 - exp(-0.0005 * t * t));
 
             } else {
                 // sky and sun
                 float sky = clamp(0.6 * (1.0 - 0.8 * norm.y), 0.0, 1.0);
                 float diffuse = clamp(0.4 * sunDot, 0.0, 1.0);
-                color = sky * skyColor + pow(sunDot, 800.0) * sunColor + diffuse * skyDiffuseColor;
+                color = sky * skyColor + pow(sunDot, 800.0) * sunColor + diffuse * skyLightColor;
 
                 // clouds
                 t = (cloudsHeight - ro.y) / rd.y;
@@ -176,7 +176,7 @@
                     vec3 pos = ro + rd * t;
                     pos.z += uGlobalTime * 10.0;
                     float clouds = fBmC(0.0025 * pos.xz) * cloudsDensity + cloudsCover;
-                    color = mix(color, mix(cloudsColor * 1.1, sunColor + diffuse * sunDiffuseColor, 0.25), 0.8 * smoothstep(0.1, 0.9, clouds));
+                    color = mix(color, mix(cloudsColor * 1.1, sunColor + diffuse * sunLightColor, 0.25), 0.8 * smoothstep(0.1, 0.9, clouds));
                 }
 
                 // horizon
