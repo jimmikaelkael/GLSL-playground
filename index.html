@@ -1,40 +1,56 @@
 <!DOCTYPE html>
 <html>
-
   <head>
     <meta charset='utf-8'>
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <meta name="description" content="Glsl-playground : Just me playing with GLSL shaders on procedural terrain generation directly on the GPU.">
-
-    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
-
-    <title>Glsl-playground</title>
+    <link href='https://fonts.googleapis.com/css?family=Chivo:900' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <title>Glsl-playground by jimmikaelkael</title>
   </head>
 
   <body>
+    <div id="container">
+      <div class="inner">
 
-    <!-- HEADER -->
-    <div id="header_wrap" class="outer">
-        <header class="inner">
-          <a id="forkme_banner" href="https://github.com/jimmikaelkael/GLSL-playground">View on GitHub</a>
-
-          <h1 id="project_title">Glsl-playground</h1>
-          <h2 id="project_tagline">Just me playing with GLSL shaders on procedural terrain generation directly on the GPU.</h2>
-
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/jimmikaelkael/GLSL-playground/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/jimmikaelkael/GLSL-playground/tarball/master">Download this project as a tar.gz file</a>
-            </section>
+        <header>
+          <h1>Glsl-playground</h1>
+          <h2>GLSL shaders for procedural terrain generation directly on the GPU.</h2>
         </header>
-    </div>
 
-    <!-- MAIN CONTENT -->
-    <div id="main_content_wrap" class="outer">
-      <section id="main_content" class="inner">
-        <h1>
+        <section id="downloads" class="clearfix">
+          <a href="https://github.com/jimmikaelkael/GLSL-playground/zipball/master" id="download-zip" class="button"><span>Download .zip</span></a>
+          <a href="https://github.com/jimmikaelkael/GLSL-playground/tarball/master" id="download-tar-gz" class="button"><span>Download .tar.gz</span></a>
+          <a href="https://github.com/jimmikaelkael/GLSL-playground" id="view-on-github" class="button"><span>View on GitHub</span></a>
+        </section>
+
+        <hr>
+
+        <section id="main_content">
+          <h1>
 <a id="glsl-playground" class="anchor" href="#glsl-playground" aria-hidden="true"><span class="octicon octicon-link"></span></a>GLSL-playground</h1>
 
-<p>Just me playing with GLSL shaders on procedural terrain generation directly on the GPU.</p>
+<p>GLSL shaders for procedural terrain generation directly on the GPU.</p>
+
+<p>Recently I became highly interested in procedural landscape generation, and especially with what
+you can do directly on a modern GPU using shaders. My goal is to achieve some procedural landscape
+generation demos using only a minimal texture set and using procedural textures everywhere it's
+possible.</p>
+
+<p>Here's what have been done already:</p>
+
+<ul>
+<li>height mapping (with procedural noise texture, Perlin, Simplex, etc...)</li>
+<li>normal mapping (Sobel and Scharr operator)</li>
+<li>ambient occlusion (not SSAO, but rather based on heightmap)</li>
+<li>lighting (spherical harmonics)</li>
+<li>skybox (cube and sphere map)</li>
+<li>pixel shader demos (full screen quad geometry)</li>
+</ul>
 
 <p>The demos are using three.js, a JavaScript 3D Library which makes WebGL simpler:
 <a href="http://threejs.org">http://threejs.org</a></p>
@@ -46,23 +62,31 @@
 </li>
 <li>Giliam de Carpentier articles: <a href="http://www.decarpentier.nl/scape-procedural-basics">http://www.decarpentier.nl/scape-procedural-basics</a>
 </li>
+<li>Florian Boesch articles on codeflow: <a href="http://codeflow.org/">http://codeflow.org/</a>
+</li>
+<li>John Chapman tutorial on SSAO: <a href="http://john-chapman-graphics.blogspot.fr/2013/01/ssao-tutorial.html">http://john-chapman-graphics.blogspot.fr/2013/01/ssao-tutorial.html</a>
+</li>
+<li>Nutty Software articles: <a href="http://www.nutty.ca/">http://www.nutty.ca/</a>
+</li>
+<li>Ravi Ramamoorthi and Pat Hanrahan paper on lighting: <a href="http://graphics.stanford.edu/papers/envmap/">http://graphics.stanford.edu/papers/envmap/</a>
+</li>
+<li>Randi J. Rost Orange Book on OpenGL Shading Language</li>
 <li>Ashima Arts noise for WebGL: <a href="https://github.com/ashima/webgl-noise">https://github.com/ashima/webgl-noise</a>
+</li>
+<li>Light probe images: <a href="http://www.unparent.com/photos_probes.html">http://www.unparent.com/photos_probes.html</a>
 </li>
 <li>Prototype.js, an object-oriented Javascript framework: <a href="https://github.com/sstephenson/prototype">https://github.com/sstephenson/prototype</a>
 </li>
 </ul>
-      </section>
+        </section>
+
+        <footer>
+          Glsl-playground is maintained by <a href="https://github.com/jimmikaelkael">jimmikaelkael</a><br>
+          This page was generated by <a href="http://pages.github.com">GitHub Pages</a>. Tactile theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.
+        </footer>
+
+        
+      </div>
     </div>
-
-    <!-- FOOTER  -->
-    <div id="footer_wrap" class="outer">
-      <footer class="inner">
-        <p class="copyright">Glsl-playground maintained by <a href="https://github.com/jimmikaelkael">jimmikaelkael</a></p>
-        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
-      </footer>
-    </div>
-
-    
-
   </body>
 </html>
