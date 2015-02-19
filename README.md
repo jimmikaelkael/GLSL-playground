@@ -12,7 +12,7 @@ Here's what have been done already:
  - ambient occlusion (not SSAO, but rather based on heightmap)
  - lighting (spherical harmonics)
  - skybox (cube and sphere map)
- - pixel shader demos (full screen quad geometry)
+ - pixel shader demos (full screen quad geometry, ray marching)
 
 The demos are using three.js, a JavaScript 3D Library which makes WebGL simpler:
 http://threejs.org
@@ -25,6 +25,8 @@ Some other very useful resources that were used:
  - Nutty Software articles: http://www.nutty.ca/
  - Ravi Ramamoorthi and Pat Hanrahan paper on lighting: http://graphics.stanford.edu/papers/envmap/
  - Randi J. Rost Orange Book on OpenGL Shading Language
+ - Texturing And Modeling - A Procedural Approach, 3rd Edition Book (Morgan Kaufmann, 2003)
+ - SIGGRAPH 2006 Course 26 paper: http://developer.amd.com/wordpress/media/2012/10/Course_26_SIGGRAPH_2006.pdf
  - Ashima Arts noise for WebGL: https://github.com/ashima/webgl-noise
  - Light probe images: http://www.unparent.com/photos_probes.html
  - Prototype.js, an object-oriented Javascript framework: https://github.com/sstephenson/prototype
