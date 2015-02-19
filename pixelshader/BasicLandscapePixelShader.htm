@@ -84,10 +84,10 @@
             float t = tmin;
             for (int i = 0; i < 300; i++) {
                 vec3 p = ro + rd * t;
-                float h = p.y - fBm(p.xz);
-                if (h < (0.001 * t) || t > tmax)
+                float d = p.y - fBm(p.xz);
+                if (d < (0.001 * t) || t > tmax)
                     break;
-                t += 0.2 * h;
+                t += 0.2 * d;
             }
             return t;
         }
@@ -101,15 +101,19 @@
                                   fBm(vec2(p.x, p.z - eps)) - fBm(vec2(p.x, p.z + eps))));
         }
 
-        float raymarchAO(in vec3 ro, in vec3 rd) {
+        float raymarchAO(in vec3 ro, in vec3 rd, float tmin) {
+            // the technique is explained in one of IQ's presentations: NVScene 08 - Rendering Worlds With Two Triangles
+            // http://www.iquilezles.org/www/material/nvscene2008/rwwtt.pdf (pages 47 to 54, formula on page 53)
+            // the original basic technique was presented by Alex Evans in SIGGRAPH 2006 paper:
+            // http://developer.amd.com/wordpress/media/2012/10/Course_26_SIGGRAPH_2006.pdf (chapter 9)
             float ao = 0.0;
-            for (float i = 0.0; i < 8.0; i++) {
-                float t = 0.1 + pow(i / 8.0, 2.0);
+            for (float i = 0.0; i < 5.0; i++) {
+                float t = tmin + pow(i / 5.0, 2.0);
                 vec3 p = ro + rd * t;
-                float h = (p.y - fBm(p.xz));
-                ao += max(0.0, t - 0.5 * h - 0.05);
+                float d = p.y - fBm(p.xz);
+                ao += max(0.0, t - 0.5 * d - 0.05);
             }
-            return 1.0 - 0.2 * ao;
+            return 1.0 - 0.4 * ao;
         }
 
         float raymarchShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
@@ -120,10 +124,10 @@
             float t = tmin;
             for(int i = 0; i < 50; i++) {
                 vec3 p = ro + rd * t;
-                float h = p.y - fBm(p.xz);
-                sh = min(sh, 16.0 * h / t);
-                t += 0.5 * h;
-                if (h < (0.001 * t) || t > tmax)
+                float d = p.y - fBm(p.xz);
+                sh = min(sh, 16.0 * d / t);
+                t += 0.5 * d;
+                if (d < (0.001 * t) || t > tmax)
                     break;
             }
             return sh;
@@ -131,12 +135,11 @@
 
         void main() {
             vec2 p = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
-            vec3 norm = normalize(vec3(p.xy, 1.0));
 
-            vec3 ro = vec3(1.0 + cos(uGlobalTime * 0.1) * 1.0, 2.0 + sin(uGlobalTime * 0.1) * 0.5 - 0.15, 1.0 + uGlobalTime * 0.5);
-            vec3 rd = norm;
+            vec3 ro = vec3(1.0 + cos(uGlobalTime * 0.1), 2.0 + sin(uGlobalTime * 0.1) * 0.5 - 0.15, 1.0 + uGlobalTime * 0.5);
+            vec3 rd = normalize(vec3(p.xy, 1.0));
 
-            float sunDot = clamp(dot(sunDirection, norm), 0.0, 1.0);
+            float sunDot = clamp(dot(sunDirection, rd), 0.0, 1.0);
 
             // terrain marching
             float tmin = 0.1;
@@ -158,14 +161,14 @@
                 // indirect light reflected back in opposite direction of the sun
                 float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), tnorm), 0.0, 1.0);
                 // raymarching AO from position in its normal direction
-                float occ = clamp(raymarchAO(tpos, tnorm), 0.0, 1.0);
+                float occ = clamp(raymarchAO(tpos, tnorm, 0.1), 0.0, 1.0);
                 // raymarching penumbra shadows in sun direction
-                float shadow = clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
+                float sha = clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
                 // compute light color
-                vec3 lightColor = 1.2 * sun * sunLightColor * occ;    // sunlight
-                lightColor *= pow(vec3(shadow), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
-                lightColor += 0.7 * sky * skyLightColor * occ;        // add skylight
-                lightColor += 0.3 * ind * indLightColor * occ;        // add backlight
+                vec3 lightColor = 1.2 * sun * sunLightColor * occ; // sunlight
+                lightColor *= pow(vec3(sha), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
+                lightColor += 0.7 * sky * skyLightColor * occ;     // add skylight
+                lightColor += 0.3 * ind * indLightColor * occ;     // add backlight
 
                 // rock
                 color = 0.2 * texture2D(uTexture1, tpos.xz, 0.0 - maxmipmap).rgb;
@@ -179,7 +182,7 @@
 
             } else {
                 // sky and sun
-                float sky = clamp(0.6 * (1.0 - 0.8 * norm.y), 0.0, 1.0);
+                float sky = clamp(0.6 * (1.0 - 0.8 * rd.y), 0.0, 1.0);
                 float diffuse = clamp(0.4 * sunDot, 0.0, 1.0);
                 color = sky * skyColor + pow(sunDot, 800.0) * sunColor + diffuse * skyLightColor;
 
