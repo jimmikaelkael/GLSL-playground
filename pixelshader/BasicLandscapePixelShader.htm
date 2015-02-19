@@ -78,7 +78,7 @@
             return sum;
         }
 
-        float intersect(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
+        float raymarchTerrain(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
             // terrain marching as explained by Inigo Quilez in his articles:
             // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
             float t = tmin;
@@ -101,7 +101,18 @@
                                   fBm(vec2(p.x, p.z - eps)) - fBm(vec2(p.x, p.z + eps))));
         }
 
-        float rayMarchShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+        float raymarchAO(in vec3 ro, in vec3 rd) {
+            float ao = 0.0;
+            for (float i = 0.0; i < 8.0; i++) {
+                float t = 0.1 + pow(i / 8.0, 2.0);
+                vec3 p = ro + rd * t;
+                float h = (p.y - fBm(p.xz));
+                ao += max(0.0, t - 0.5 * h - 0.05);
+            }
+            return 1.0 - 0.2 * ao;
+        }
+
+        float raymarchShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
             // penumbra shadows as described by IQ in article "free penumbra shadows
             // for raymarching distance fields":
             // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
@@ -110,7 +121,7 @@
             for(int i = 0; i < 50; i++) {
                 vec3 p = ro + rd * t;
                 float h = p.y - fBm(p.xz);
-                sh = min(sh, 8.0 * h / t);
+                sh = min(sh, 16.0 * h / t);
                 t += 0.5 * h;
                 if (h < (0.001 * t) || t > tmax)
                     break;
@@ -130,7 +141,7 @@
             // terrain marching
             float tmin = 0.1;
             float tmax = 50.0;
-            float t = intersect(ro, rd, tmin, tmax);
+            float t = raymarchTerrain(ro, rd, tmin, tmax);
             vec3 color;
             if (t < tmax) {
                 // get position where the ray has hit
@@ -146,17 +157,19 @@
                 float sky = clamp(0.5 + 0.5 * tnorm.y, 0.0, 1.0);
                 // indirect light reflected back in opposite direction of the sun
                 float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), tnorm), 0.0, 1.0);
-                // raymarching penumbra shadows
-                float shadow = clamp(rayMarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
+                // raymarching AO from position in its normal direction
+                float occ = clamp(raymarchAO(tpos, tnorm), 0.0, 1.0);
+                // raymarching penumbra shadows in sun direction
+                float shadow = clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
                 // compute light color
-                vec3 lightColor = 1.2 * sun * sunLightColor;    // sunlight
-                lightColor *= pow(vec3(shadow), sunLightColor); // multiply sunlight by penumbra shadows
-                lightColor += 0.7 * sky * skyLightColor;        // add skylight
-                lightColor += 0.3 * ind * indLightColor;        // add backlight
+                vec3 lightColor = 1.2 * sun * sunLightColor * occ;    // sunlight
+                lightColor *= pow(vec3(shadow), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
+                lightColor += 0.7 * sky * skyLightColor * occ;        // add skylight
+                lightColor += 0.3 * ind * indLightColor * occ;        // add backlight
 
                 // rock
                 color = 0.2 * texture2D(uTexture1, tpos.xz, 0.0 - maxmipmap).rgb;
-                color *= 1.25 * lightColor;
+                color *= 1.0 * lightColor;
 
                 // fog: mixes a blue fog, and a red fog with sun amount
                 // this is described by IQ in his "Better Fog" article:
