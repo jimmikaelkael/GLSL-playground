@@ -136,9 +136,28 @@
         void main() {
             vec2 p = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
 
-            vec3 ro = vec3(1.0 + cos(uGlobalTime * 0.1), 2.0 + sin(uGlobalTime * 0.1) * 0.5 - 0.15, 1.0 + uGlobalTime * 0.5);
-            vec3 rd = normalize(vec3(p.xy, 1.0));
+            // eye rotation
+            vec3 eye = vec3(1.0, 2.0, 1.0);
+            vec2 rot = 6.2831 * (vec2(0.0, 0.25) + vec2(1.0, 0.25) * (uMouse.xy - uResolution.xy * 0.5) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
 
+            // origin displacement and view direction
+            vec3 ro = eye + vec3(cos(uGlobalTime * 0.1) * 1.25, sin(uGlobalTime * 0.1) * 0.5 + 0.15, uGlobalTime * 0.5);
+            ro.y += 2.0;
+            vec3 ta = vec3(0.0, -0.5, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            // the powerful sun dot
             float sunDot = clamp(dot(sunDirection, rd), 0.0, 1.0);
 
             // terrain marching
@@ -190,7 +209,7 @@
                 t = (cloudsHeight - ro.y) / rd.y;
                 if (t > 0.0) {
                     vec3 pos = ro + rd * t;
-                    pos.z += uGlobalTime * 10.0;
+                    pos.z += uGlobalTime * 20.0;
                     float clouds = fBmC(0.0025 * pos.xz) * cloudsDensity + cloudsCover;
                     color = mix(color, mix(cloudsColor * 1.1, sunColor + diffuse * sunLightColor, 0.25), 0.8 * smoothstep(0.1, 0.9, clouds));
                 }
