@@ -27,7 +27,6 @@
         uniform float uGlobalTime;
         uniform vec4 uMouse;
         uniform sampler2D uTexture0;
-        uniform sampler2D uTexture1;
 
         vec3 sunColor = vec3(1.8, 1.0, 0.6);
         vec3 skyColor = vec3(0.4, 0.6, 0.75);
@@ -190,7 +189,9 @@
                 lightColor += 0.3 * ind * indLightColor * occ;     // add backlight
 
                 // rock
-                color = 0.2 * texture2D(uTexture1, tpos.xz, 0.0 - maxmipmap).rgb;
+                color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7, 0.0 - maxmipmap).rgb;
+                color = mix(0.2 * vec3(0.35, 0.3, 0.25), color, 0.2); // gray with dots from noise
+                color = mix(0.15 * vec3(0.35, 0.3, 0.25), color, texture2D(uTexture0, 0.002 * vec2(tpos.x+ noise2d(tpos.xz) * 80.0, tpos.y * 8.0 + noise2d(tpos.xz) * 8.0)).r); // stripes
                 color *= 1.0 * lightColor;
 
                 // fog: mixes a blue fog, and a red fog with sun amount
