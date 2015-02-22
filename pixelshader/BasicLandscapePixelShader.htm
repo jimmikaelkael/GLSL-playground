@@ -189,10 +189,10 @@
                 lightColor += 0.3 * ind * indLightColor * occ;     // add backlight
 
                 // rock
-                color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7, 0.0 - maxmipmap).rgb;
+                color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7).rgb;
                 color = mix(0.2 * vec3(0.35, 0.3, 0.25), color, 0.2); // gray with dots from noise
-                color = mix(0.15 * vec3(0.35, 0.3, 0.25), color, texture2D(uTexture0, 0.002 * vec2(tpos.x+ noise2d(tpos.xz) * 80.0, tpos.y * 8.0 + noise2d(tpos.xz) * 8.0)).r); // stripes
-                color *= 1.0 * lightColor;
+                color = mix(0.15 * vec3(0.35, 0.3, 0.25), color, texture2D(uTexture0, 0.002 * vec2(tpos.x + noise2d(tpos.xz) * 80.0, tpos.y * 8.0 + noise2d(tpos.xz) * 8.0)).r); // stripes
+                color *= 2.0 * lightColor;
 
                 // fog: mixes a blue fog, and a red fog with sun amount
                 // this is described by IQ in his "Better Fog" article:
@@ -257,8 +257,6 @@
             // load noise texture
             var tex0 = THREE.ImageUtils.loadTexture("textures/noise2d.png");
             tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
-            var tex1 = THREE.ImageUtils.loadTexture("textures/12347-v4.jpg");
-            tex1.wrapS = tex1.wrapT = THREE.RepeatWrapping;
 
             // create a shader material
             material = new THREE.ShaderMaterial({
@@ -266,8 +264,7 @@
                     uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
                     uGlobalTime: { type:"f", value: 1.0 },
                     uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
-                    uTexture0: { type:"t", value: tex0 },
-                    uTexture1: { type:"t", value: tex1 },
+                    uTexture0: { type:"t", value: tex0 }
                 },
                 vertexShader: document.getElementById('vertexShader').textContent,
                 fragmentShader: document.getElementById('fragmentShader').textContent,
