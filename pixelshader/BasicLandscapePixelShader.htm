@@ -192,7 +192,7 @@
                 color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7).rgb;
                 color = mix(0.2 * vec3(0.35, 0.3, 0.25), color, 0.2); // gray with dots from noise
                 color = mix(0.15 * vec3(0.35, 0.3, 0.25), color, texture2D(uTexture0, 0.002 * vec2(tpos.x + noise2d(tpos.xz) * 80.0, tpos.y * 8.0 + noise2d(tpos.xz) * 8.0)).r); // stripes
-                color *= 2.0 * lightColor;
+                color *= 1.0 * lightColor;
 
                 // fog: mixes a blue fog, and a red fog with sun amount
                 // this is described by IQ in his "Better Fog" article:
