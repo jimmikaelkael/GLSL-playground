@@ -27,6 +27,13 @@ Some other very useful resources that were used:
  - Randi J. Rost Orange Book on OpenGL Shading Language
  - Texturing And Modeling - A Procedural Approach, 3rd Edition Book (Morgan Kaufmann, 2003)
  - SIGGRAPH 2006 Course 26 paper: http://developer.amd.com/wordpress/media/2012/10/Course_26_SIGGRAPH_2006.pdf
+ - Raymarching distance fields article on 9bit Science: http://9bitscience.blogspot.jp/2013/07/raymarching-distance-fields_14.html
+ - GPU Ray Marching of Distance Fields by Lukasz Jaroslaw Tomczak: http://www2.compute.dtu.dk/pubdb/views/edoc_download.php/6392/pdf/imm6392.pdf
+ - GPU Gems 2, Chapter 19, Generic Refraction Simulation: http://http.developer.nvidia.com/GPUGems2/gpugems2_chapter19.html
+ - Displacement Mapping on the GPU - State of the Art: http://sirkan.iit.bme.hu/~szirmay/egdisfinal3.pdf
+ - SIGGRAPH 2005 paper, Practical Dynamic Parallax Occlusion Mapping: http://developer.amd.com/wordpress/media/2012/10/Tatarchuk-ParallaxOcclusionMapping-Sketch-print.pdf
+ - SIGGRAPH 2005 paper, Practical Dynamic Parallax Occlusion Mapping For Highly Detailed Surface Rendering: http://developer.amd.com/wordpress/media/2012/10/Tatarchuk-POM.pdf
+ - SIGGRAPH 2008 paper, Image-Space Horizon-Based AO: http://developer.download.nvidia.com/presentations/2008/SIGGRAPH/HBAO_SIG08b.pdf
  - Ashima Arts noise for WebGL: https://github.com/ashima/webgl-noise
  - Light probe images: http://www.unparent.com/photos_probes.html
  - Prototype.js, an object-oriented Javascript framework: https://github.com/sstephenson/prototype
