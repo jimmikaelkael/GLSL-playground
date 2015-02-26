@@ -1,6 +1,6 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Sphere Pixel Shader</title>
+        <title>WebGL/GLSL - Sphere (raytraced) Pixel Shader</title>
         <meta charset="utf-8">
         <link rel="stylesheet" type="text/css" href="../css/styles.css">
     </head>
@@ -30,10 +30,10 @@
 
         vec3 spherePos = vec3(0.0, 1.0, 0.0);
 
-        float raytraceSphere(in vec3 ro, in vec3 rd, float tmin, float tmax, float radius) {
+        float raytraceSphere(in vec3 ro, in vec3 rd, float tmin, float tmax, float r) {
             vec3 ce = ro - spherePos;
             float b = dot(rd, ce);
-            float c = dot(ce, ce) - radius * radius;
+            float c = dot(ce, ce) - r * r;
             float t = b * b - c;
             if (t > tmin) {
                 t = -b - sqrt(t);
@@ -45,9 +45,11 @@
 
         vec4 texcube(sampler2D tex, in vec3 pos, in vec3 norm, float k) {
             vec3 m = pow(abs(norm), vec3(k));
-            vec4 x = texture2D(tex, pos.yz);
-            vec4 y = texture2D(tex, pos.zx);
-            vec4 z = texture2D(tex, pos.xy);
+            vec3 d = spherePos - pos;
+            float lod = 0.25 * length(d);
+            vec4 x = texture2D(tex, pos.yz, lod);
+            vec4 y = texture2D(tex, pos.zx, lod);
+            vec4 z = texture2D(tex, pos.xy, lod);
             return (x * m.x + y * m.y + z * m.z) / (m.x + m.y + m.z);
         }
 
@@ -85,7 +87,7 @@
                 vec3 spos = ro + rd * t;
                 vec3 snorm = normalize(spos - spherePos);
                 float occ = 0.5 + 0.5 * snorm.y;
-                color = (0.8 * texcube(uTexture0, spos, snorm, 16.0).xyz) * occ;
+                color = (0.8 * texcube(uTexture0, spos, snorm, 32.0).xyz) * occ;
             }
 
             // gamma correction
