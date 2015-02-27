@@ -86,7 +86,7 @@
                 // get lambertian diffuse term: http://en.wikipedia.org/wiki/Lambertian_reflectance
                 float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
 
-                color = vec3(amb + dif) * 0.5;
+                color = 0.8 * vec3(amb + dif) * occ;
             } else {
                 // colorize the light spot
                 float light = clamp(dot(lightDir, rd), 0.0, 1.0);
