@@ -30,6 +30,7 @@ Some other very useful resources that were used:
  - Raymarching distance fields article on 9bit Science: http://9bitscience.blogspot.jp/2013/07/raymarching-distance-fields_14.html
  - GPU Ray Marching of Distance Fields by Lukasz Jaroslaw Tomczak: http://www2.compute.dtu.dk/pubdb/views/edoc_download.php/6392/pdf/imm6392.pdf
  - Basic Principles of Surface Relectance paper: http://www.cs.cmu.edu/afs/cs/academic/class/15462-f09/www/lec/lec8.pdf
+ - SIGGRAPH 94 paper, Generalization of Lambert’s Reflectance Model (by Oren & Nayar): http://www1.cs.columbia.edu/CAVE/publications/pdfs/Oren_SIGGRAPH94.pdf
  - GPU Gems 2, Chapter 19, Generic Refraction Simulation: http://http.developer.nvidia.com/GPUGems2/gpugems2_chapter19.html
  - Displacement Mapping on the GPU - State of the Art: http://sirkan.iit.bme.hu/~szirmay/egdisfinal3.pdf
  - SIGGRAPH 2005 paper, Practical Dynamic Parallax Occlusion Mapping: http://developer.amd.com/wordpress/media/2012/10/Tatarchuk-ParallaxOcclusionMapping-Sketch-print.pdf
