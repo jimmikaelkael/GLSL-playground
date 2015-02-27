@@ -86,8 +86,8 @@
                 float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
 
                 // Phong - http://en.wikipedia.org/wiki/Phong_shading
-                vec3 ref = reflect(rd, norm);
-                float spe = pow(clamp(dot(ref, lightDir), 0.0, 1.0), 16.0);
+                vec3 ref = reflect(lightDir, norm);
+                float spe = pow(clamp(dot(ref, rd), 0.0, 1.0), 16.0);
 
                 color = amb * ambientColor * occ;
                 color += 0.025 * dif * diffuseColor * occ;
