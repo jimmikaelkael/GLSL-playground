@@ -43,16 +43,6 @@
             return -1.0;
         }
 
-        vec4 texcube(sampler2D tex, in vec3 pos, in vec3 norm, float k) {
-            vec3 m = pow(abs(norm), vec3(k));
-            vec3 d = spherePos - pos;
-            float lod = 0.25 * length(d);
-            vec4 x = texture2D(tex, pos.yz, lod);
-            vec4 y = texture2D(tex, pos.zx, lod);
-            vec4 z = texture2D(tex, pos.xy, lod);
-            return (x * m.x + y * m.y + z * m.z) / (m.x + m.y + m.z);
-        }
-
         void main() {
             vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
 
@@ -84,10 +74,11 @@
             // raytrace the sphere
             float t = raytraceSphere(ro, rd, tmin, tmax, 1.0);
             if (t > tmin && t < tmax) {
-                vec3 spos = ro + rd * t;
-                vec3 snorm = normalize(spos - spherePos);
-                float occ = 0.5 + 0.5 * snorm.y;
-                color = (0.8 * texcube(uTexture0, spos, snorm, 32.0).xyz) * occ;
+                vec3 pos = ro + rd * t;
+                vec3 norm = normalize(pos - spherePos);
+                float occ = 0.5 + 0.5 * norm.y;
+                vec2 uv = vec2(atan(norm.x, norm.z), acos(norm.y));
+                color = mix(vec3(0.1, 0.0, 1.0), texture2D(uTexture0, uv).xyz, 0.05) * occ;
             }
 
             // gamma correction
@@ -126,7 +117,7 @@
             scene.add(camera);
 
             // load texture
-            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_gray.png");
             tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
 
             // create a shader material

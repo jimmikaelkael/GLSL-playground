@@ -41,7 +41,7 @@
             vec2 f = fract(p);
             f = f * f * (3.0 - 2.0 * f);
             vec2 uv = i + f + vec2(128.0, 128.0);
-            float h = texture2D(uTexture0, uv / 256.0, 0.0 - maxmipmap).r;
+            float h = texture2D(uTexture0, uv / 256.0, 0.0 - maxmipmap).x;
             return h * 2.0 - 1.0;
         }
 
@@ -50,7 +50,7 @@
             vec3 f = fract(p);
             f = f * f * (3.0 - 2.0 * f);
             vec2 uv = i.xz + f.xz + vec2(128.0, 128.0);
-            vec3 rgb = texture2D(uTexture1, uv / 256.0, 0.0 - maxmipmap).rgb;
+            vec3 rgb = texture2D(uTexture1, uv / 256.0, 0.0 - maxmipmap).xyz;
             return mix(rgb.x, rgb.y, rgb.z);
         }
 
@@ -149,7 +149,7 @@
                 vec3 tnorm = getRockNormal(tpos, t);
 
                 color = vec3(0.01, 0.01 ,0.02);
-                color = mix(color, texture2D(uTexture0, tpos.xz + rockMotion).rgb * 0.25, 0.05);
+                color = mix(color, texture2D(uTexture0, tpos.xz + rockMotion).xyz * 0.25, 0.05);
 
                 float occ = clamp(raymarchAO(tpos, tnorm, 0.1), 0.0, 1.0);
                 float sha = 0.05 + clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
