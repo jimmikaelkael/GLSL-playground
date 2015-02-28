@@ -1,0 +1,229 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Beckmann specular Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../js/Three.min.js"></script>
+    <script src="../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+
+        vec3 ambientColor = vec3(0.025, 0.0, 0.25);
+        vec3 diffuseColor = vec3(0.075, 0.0, 0.75);
+        vec3 specularColor = vec3(1.0, 1.0, 1.0);
+        vec3 spotColor = vec3(1.0, 1.0, 1.0);
+        vec3 lightDir = normalize(vec3(0.0, 3.0, 5.0));
+        vec3 spherePos = vec3(0.0, 1.0, 0.0);
+
+        float raytraceSphere(in vec3 ro, in vec3 rd, float tmin, float tmax, float r) {
+            vec3 ce = ro - spherePos;
+            float b = dot(rd, ce);
+            float c = dot(ce, ce) - r * r;
+            float t = b * b - c;
+            if (t > tmin) {
+                t = -b - sqrt(t);
+                if (t < tmax)
+                    return t;
+            }
+            return -1.0;
+        }
+
+        void main() {
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+
+            // eye rotation
+            vec3 eye = vec3(0.0, 1.0, 4.0);
+            vec2 rot = 6.2831 * (vec2(0.1 + uGlobalTime * 0.25, sin(uGlobalTime * 0.5) * 0.06) + vec2(1.0, 0.0) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(0.0, 1.0, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            // background
+            vec3 color = vec3(0.0);
+
+            float tmin = 0.1;
+            float tmax = 50.0;
+            // raytrace the sphere
+            float t = raytraceSphere(ro, rd, tmin, tmax, 1.0);
+            if (t > tmin && t < tmax) {
+                vec3 pos = ro + rd * t;
+                vec3 norm = normalize(pos - spherePos);
+                float occ = 0.5 + 0.5 * norm.y;
+
+                float amb = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
+                float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
+
+                // Beckmann distribution: http://en.wikipedia.org/wiki/Specular_highlight
+                float roughness = 0.1;
+
+                vec3 h = normalize(-rd + lightDir);
+                float NdotH = max(dot(norm, h), 0.0001);
+                float cos2a = NdotH * NdotH;
+                float tan2a = (cos2a - 1.0) / cos2a;
+                float r = max(roughness, 0.0001);
+                float r2 = r * r;
+                float spe = exp(tan2a / r2) / (r2 * cos2a * cos2a);
+
+                color = amb * ambientColor * occ;
+                color += dif * diffuseColor * occ;
+                color += dif * spe * specularColor * occ;
+            } else {
+                // colorize the light spot
+                float light = clamp(dot(lightDir, rd), 0.0, 1.0);
+                color = 25.0 * pow(light, 1000.0) * spotColor;
+            }
+
+            // gamma correction
+            vec3 gamma = vec3(1.0 / 2.2);
+            gl_FragColor = vec4(pow(color, gamma), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load noise texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
