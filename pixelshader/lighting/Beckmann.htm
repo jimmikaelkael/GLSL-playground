@@ -1,16 +1,16 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Phong shading Pixel Shader</title>
+        <title>WebGL/GLSL - Beckmann specular Pixel Shader</title>
         <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
         <div id="container"></div>
     </body>
 
-    <script src="../js/Three.min.js"></script>
-    <script src="../js/Detector.js"></script>
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -85,14 +85,22 @@
                 float amb = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
                 float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
 
-                // Phong - http://en.wikipedia.org/wiki/Phong_shading
-                vec3 ref = reflect(-lightDir, norm);
-                float spe = pow(clamp(dot(ref, -rd), 0.0, 1.0), 16.0);
+                // Beckmann distribution: http://en.wikipedia.org/wiki/Specular_highlight
+                float roughness = 0.1;
+
+                vec3 h = normalize(-rd + lightDir);
+                float NdotH = max(dot(norm, h), 0.0001);
+                float cos2a = NdotH * NdotH;
+                float tan2a = (cos2a - 1.0) / cos2a;
+                float r = max(roughness, 0.0001);
+                float r2 = r * r;
+                float spe = exp(tan2a / r2) / (r2 * cos2a * cos2a);
 
                 color = amb * ambientColor * occ;
                 color += dif * diffuseColor * occ;
                 color += dif * spe * specularColor * occ;
             } else {
+                // colorize the light spot
                 float light = clamp(dot(lightDir, rd), 0.0, 1.0);
                 color = 25.0 * pow(light, 1000.0) * spotColor;
             }

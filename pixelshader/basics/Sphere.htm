@@ -1,16 +1,16 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Stars Pixel Shader</title>
+        <title>WebGL/GLSL - Sphere (raytraced) Pixel Shader</title>
         <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
         <div id="container"></div>
     </body>
 
-    <script src="../js/Three.min.js"></script>
-    <script src="../js/Detector.js"></script>
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -27,105 +27,44 @@
         uniform float uGlobalTime;
         uniform vec4 uMouse;
         uniform sampler2D uTexture0;
-        uniform sampler2D uTexture1;
 
-        vec3 sunColor = vec3(1.8, 1.0, 0.6);
-        vec3 sunLightColor = vec3(3.4, 2.5, 1.8);
-        vec3 sunDirection = normalize(vec3(-0.5, 1.0, 1.0));
-        vec3 sp = vec3(1.0, 4.0, 0.0);
-        float rockMotion = uGlobalTime * 0.25;
-        float maxmipmap = 100.0;
+        vec3 spherePos = vec3(0.0, 1.0, 0.0);
 
-        float noise2d(in vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            f = f * f * (3.0 - 2.0 * f);
-            vec2 uv = i + f + vec2(128.0, 128.0);
-            float h = texture2D(uTexture0, uv / 256.0, 0.0 - maxmipmap).r;
-            return h * 2.0 - 1.0;
-        }
-
-        float noise3d(in vec3 p) {
-            vec3 i = floor(p);
-            vec3 f = fract(p);
-            f = f * f * (3.0 - 2.0 * f);
-            vec2 uv = i.xz + f.xz + vec2(128.0, 128.0);
-            vec3 rgb = texture2D(uTexture1, uv / 256.0, 0.0 - maxmipmap).rgb;
-            return mix(rgb.x, rgb.y, rgb.z);
-        }
-
-        float fBm(in vec3 p) {
-            float sum = 0.0;
-            float amp = 1.0;
-            for(int i = 0; i < 4; i++) {
-                sum += amp * noise3d(p);
-                amp *= 0.5;
-                p *= 2.0;
+        float raytraceSphere(in vec3 ro, in vec3 rd, float tmin, float tmax, float r) {
+            vec3 ce = ro - spherePos;
+            float b = dot(rd, ce);
+            float c = dot(ce, ce) - r * r;
+            float t = b * b - c;
+            if (t > tmin) {
+                t = -b - sqrt(t);
+                if (t < tmax)
+                    return t;
             }
-            return sum;
+            return -1.0;
         }
 
-        float F(in vec3 p) {
-             return length(p) - 1.0 - 0.2 * fBm(p + rockMotion) + 0.1 * fBm((p +  rockMotion + 64.0) * 5.0);
-        }
-
-        float raymarchSphere(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
-            float t = tmin;
-            for (int i = 0; i < 500; i++) {
-                vec3 p = ro + rd * t - sp;
-                float d = F(p);
-                if (d < (0.001 * t) || t > tmax)
-                    break;
-                t += 0.5 * d;
-            }
-            return t;
-        }
-
-        vec3 getRockNormal(in vec3 p, float t) {
-            float eps = max(0.025, 0.001 * t);
-            p -= sp;
-            return normalize(vec3(F(vec3(p.x - eps, p.yz)) - F(vec3(p.x + eps, p.yz)),
-                                  F(vec3(p.x, p.y - eps, p.z)) - F(vec3(p.x, p.y + eps, p.z)),
-                                  F(vec3(p.xy, p.z - eps)) - F(vec3(p.xy, p.z + eps))));
-        }
-
-        float raymarchShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
-            float sh = 1.0;
-            float t = tmin;
-            for(int i = 0; i < 50; i++) {
-                vec3 p = ro + rd * t - sp;
-                float d = F(p);
-                sh = min(sh, 4.0 * d / t);
-                t += 0.5 * d;
-                if (d < (0.001 * t) || t > tmax)
-                    break;
-            }
-            return sh;
-        }
-
-        float raymarchAO(in vec3 ro, in vec3 rd, float tmin) {
-            float ao = 0.0;
-            for (float i = 0.0; i < 5.0; i++) {
-                float t = tmin + pow(i / 5.0, 2.0);
-                vec3 p = ro + rd * t - sp;
-                float d = F(p);
-                ao += max(0.0, t - 0.5 * d - 0.05);
-            }
-            return 1.0 - 0.4 * ao;
+        vec4 texcube(sampler2D tex, in vec3 pos, in vec3 norm, float k) {
+            vec3 m = pow(abs(norm), vec3(k));
+            vec3 d = spherePos - pos;
+            float lod = 0.25 * length(d);
+            vec4 x = texture2D(tex, pos.yz, lod);
+            vec4 y = texture2D(tex, pos.zx, lod);
+            vec4 z = texture2D(tex, pos.xy, lod);
+            return (x * m.x + y * m.y + z * m.z) / (m.x + m.y + m.z);
         }
 
         void main() {
-            vec2 p = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
 
             // eye rotation
-            vec3 eye = vec3(0.0, 0.0, 1.0);
-            vec2 rot = 6.2831 * (vec2(0.0, 0.0) + vec2(1.0, 0.25) * (uMouse.xy - uResolution.xy * 0.5) / uResolution.x);
+            vec3 eye = vec3(0.0, 1.0, 2.0);
+            vec2 rot = 6.2831 * (vec2(uGlobalTime * 0.025, 0.0) + vec2(1.0, 0.25) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
             eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
             eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
 
             // origin displacement and view direction
-            vec3 ro = eye; // + vec3(cos(uGlobalTime * 0.1) * 1.0, sin(uGlobalTime * 0.1) * 0.5 + 0.15, uGlobalTime * 0.5);
-            vec3 ta = vec3(0.0, 2.5, 0.0);
+            vec3 ro = eye;
+            vec3 ta = vec3(0.0, 1.0, 0.0);
 
             // build camera matrix, I suggest reading the following for camera to world transformation:
             // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
@@ -137,41 +76,18 @@
             // compute ray direction
             vec3 rd = cam * normalize(vec3(p.xy, 1.0));
 
-            float sun = clamp(dot(sunDirection, rd), 0.5, 1.0);
-
+            // background
             vec3 color = vec3(0.0);
 
             float tmin = 0.1;
             float tmax = 50.0;
-            float t = raymarchSphere(ro, rd, tmin, tmax);
+            // raytrace the sphere
+            float t = raytraceSphere(ro, rd, tmin, tmax, 1.0);
             if (t > tmin && t < tmax) {
-                vec3 tpos = ro + rd * t;
-                vec3 tnorm = getRockNormal(tpos, t);
-
-                color = vec3(0.01, 0.01 ,0.02);
-                color = mix(color, texture2D(uTexture0, tpos.xz + rockMotion).rgb * 0.25, 0.05);
-
-                float occ = clamp(raymarchAO(tpos, tnorm, 0.1), 0.0, 1.0);
-                float sha = 0.05 + clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
-                vec3 lightColor = 1.2 * sun * sunLightColor * occ; // sunlight
-                lightColor *= pow(vec3(sha), vec3(1.0, 1.0, 1.0)); // multiply sunlight by penumbra shadows
-
-                //color = tnorm;
-                color *= 2.5 * lightColor;
-            } else {
-                // stars
-                rd.z += uGlobalTime * 0.0009;
-                float s = noise2d(rd.xz * 128.0);
-                s += noise2d(rd.xz * 382.0);
-                s += noise2d(rd.xz * 768.0);
-                s *= 0.0000000001 * pow(s, 28.0);
-                if (s > 0.0) {
-                    vec3 star = vec3(s);
-                    color += star;
-                }
-
-                // sun
-                color += (pow(sun, 2000.0) + 0.25 * pow(sun, 800.0) + 0.005 * pow(sun, 200.0)) * vec3(32.0, 26.0, 5.0);
+                vec3 spos = ro + rd * t;
+                vec3 snorm = normalize(spos - spherePos);
+                float occ = 0.5 + 0.5 * snorm.y;
+                color = (0.8 * texcube(uTexture0, spos, snorm, 32.0).xyz) * occ;
             }
 
             // gamma correction
@@ -209,11 +125,9 @@
             // add the camera to the scene
             scene.add(camera);
 
-            // load noise texture
-            var tex0 = THREE.ImageUtils.loadTexture("textures/noise2d.png");
+            // load texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
             tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
-            var tex1 = THREE.ImageUtils.loadTexture("textures/noise_rgb.png");
-            tex1.wrapS = tex1.wrapT = THREE.RepeatWrapping;
 
             // create a shader material
             material = new THREE.ShaderMaterial({
@@ -221,8 +135,7 @@
                     uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
                     uGlobalTime: { type:"f", value: 1.0 },
                     uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
-                    uTexture0: { type:"t", value: tex0 },
-                    uTexture1: { type:"t", value: tex1 }
+                    uTexture0: { type:"t", value: tex0 }
                 },
                 vertexShader: document.getElementById('vertexShader').textContent,
                 fragmentShader: document.getElementById('fragmentShader').textContent,

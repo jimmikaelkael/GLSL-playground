@@ -2,15 +2,15 @@
     <head>
         <title>WebGL/GLSL - Basic Landscape Pixel Shader</title>
         <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
         <div id="container"></div>
     </body>
 
-    <script src="../js/Three.min.js"></script>
-    <script src="../js/Detector.js"></script>
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -255,7 +255,7 @@
             scene.add(camera);
 
             // load noise texture
-            var tex0 = THREE.ImageUtils.loadTexture("textures/noise2d.png");
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_gray.png");
             tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
 
             // create a shader material

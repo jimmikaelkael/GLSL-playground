@@ -1,16 +1,16 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Lambert diffuse Pixel Shader</title>
+        <title>WebGL/GLSL - Ward anisotropic specular Pixel Shader</title>
         <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
         <div id="container"></div>
     </body>
 
-    <script src="../js/Three.min.js"></script>
-    <script src="../js/Detector.js"></script>
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -29,6 +29,7 @@
 
         vec3 ambientColor = vec3(0.025, 0.0, 0.25);
         vec3 diffuseColor = vec3(0.075, 0.0, 0.75);
+        vec3 specularColor = vec3(1.0, 1.0, 1.0);
         vec3 spotColor = vec3(1.0, 1.0, 1.0);
         vec3 lightDir = normalize(vec3(0.0, 3.0, 5.0));
         vec3 spherePos = vec3(0.0, 1.0, 0.0);
@@ -82,11 +83,34 @@
                 float occ = 0.5 + 0.5 * norm.y;
 
                 float amb = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
-
-                // get lambertian diffuse term: http://en.wikipedia.org/wiki/Lambertian_reflectance
                 float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
 
-                color = vec3(amb * ambientColor + dif * diffuseColor) * occ;
+                // Ward anisotropic distribution: http://en.wikipedia.org/wiki/Specular_highlight
+                vec3 fiberDir = vec3(1.0, -0.25, 1.0);
+                vec3 fiberPar = normalize(fiberDir);
+                vec3 fiberPerp = normalize(cross(norm, fiberDir));
+                float shinyPar = 0.2;
+                float shinyPerp = 0.2;
+
+                float NdotL = dot(norm, lightDir);
+                float NdotV = dot(norm, -rd);
+
+                float spe = 0.0;
+                if (NdotL > 0.0 && NdotV > 0.0) {
+                    vec3 h = normalize(-rd + lightDir);
+
+                    float NdotH = dot(norm, h);
+                    float XdotH = dot(fiberPar, h);
+                    float YdotH = dot(fiberPerp, h);
+
+                    float coeff = sqrt(NdotL / NdotV) / (4.0 * 3.141592653589793 * shinyPar * shinyPerp);
+                    float theta = (pow(XdotH / shinyPar, 2.0) + pow(YdotH / shinyPerp, 2.0)) / (1.0 + NdotH);
+                    spe = coeff * exp(-2.0 * theta);
+                }
+
+                color = amb * ambientColor * occ;
+                color += dif * diffuseColor * occ;
+                color += dif * spe * specularColor * occ;
             } else {
                 // colorize the light spot
                 float light = clamp(dot(lightDir, rd), 0.0, 1.0);

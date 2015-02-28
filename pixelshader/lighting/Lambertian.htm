@@ -1,16 +1,16 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Sphere (raytraced) Pixel Shader</title>
+        <title>WebGL/GLSL - Lambertian diffuse Pixel Shader</title>
         <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
         <div id="container"></div>
     </body>
 
-    <script src="../js/Three.min.js"></script>
-    <script src="../js/Detector.js"></script>
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -26,8 +26,11 @@
         uniform vec2 uResolution;
         uniform float uGlobalTime;
         uniform vec4 uMouse;
-        uniform sampler2D uTexture0;
 
+        vec3 ambientColor = vec3(0.025, 0.0, 0.25);
+        vec3 diffuseColor = vec3(0.075, 0.0, 0.75);
+        vec3 spotColor = vec3(1.0, 1.0, 1.0);
+        vec3 lightDir = normalize(vec3(0.0, 3.0, 5.0));
         vec3 spherePos = vec3(0.0, 1.0, 0.0);
 
         float raytraceSphere(in vec3 ro, in vec3 rd, float tmin, float tmax, float r) {
@@ -43,22 +46,12 @@
             return -1.0;
         }
 
-        vec4 texcube(sampler2D tex, in vec3 pos, in vec3 norm, float k) {
-            vec3 m = pow(abs(norm), vec3(k));
-            vec3 d = spherePos - pos;
-            float lod = 0.25 * length(d);
-            vec4 x = texture2D(tex, pos.yz, lod);
-            vec4 y = texture2D(tex, pos.zx, lod);
-            vec4 z = texture2D(tex, pos.xy, lod);
-            return (x * m.x + y * m.y + z * m.z) / (m.x + m.y + m.z);
-        }
-
         void main() {
             vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
 
             // eye rotation
-            vec3 eye = vec3(0.0, 1.0, 2.0);
-            vec2 rot = 6.2831 * (vec2(uGlobalTime * 0.025, 0.0) + vec2(1.0, 0.25) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            vec3 eye = vec3(0.0, 1.0, 4.0);
+            vec2 rot = 6.2831 * (vec2(0.1 + uGlobalTime * 0.25, sin(uGlobalTime * 0.5) * 0.06) + vec2(1.0, 0.0) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
             eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
             eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
 
@@ -84,10 +77,20 @@
             // raytrace the sphere
             float t = raytraceSphere(ro, rd, tmin, tmax, 1.0);
             if (t > tmin && t < tmax) {
-                vec3 spos = ro + rd * t;
-                vec3 snorm = normalize(spos - spherePos);
-                float occ = 0.5 + 0.5 * snorm.y;
-                color = (0.8 * texcube(uTexture0, spos, snorm, 32.0).xyz) * occ;
+                vec3 pos = ro + rd * t;
+                vec3 norm = normalize(pos - spherePos);
+                float occ = 0.5 + 0.5 * norm.y;
+
+                float amb = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
+
+                // get lambertian diffuse term: http://en.wikipedia.org/wiki/Lambertian_reflectance
+                float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
+
+                color = vec3(amb * ambientColor + dif * diffuseColor) * occ;
+            } else {
+                // colorize the light spot
+                float light = clamp(dot(lightDir, rd), 0.0, 1.0);
+                color = 25.0 * pow(light, 1000.0) * spotColor;
             }
 
             // gamma correction
@@ -125,17 +128,12 @@
             // add the camera to the scene
             scene.add(camera);
 
-            // load noise texture
-            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
-            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
-
             // create a shader material
             material = new THREE.ShaderMaterial({
                 uniforms: {
                     uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
                     uGlobalTime: { type:"f", value: 1.0 },
-                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
-                    uTexture0: { type:"t", value: tex0 }
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) }
                 },
                 vertexShader: document.getElementById('vertexShader').textContent,
                 fragmentShader: document.getElementById('fragmentShader').textContent,

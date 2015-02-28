@@ -1,16 +1,16 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Noise Pixel Shader</title>
+        <title>WebGL/GLSL - Plane (raytraced) Pixel Shader</title>
         <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="../css/styles.css">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
 
     <body>
         <div id="container"></div>
     </body>
 
-    <script src="../js/Three.min.js"></script>
-    <script src="../js/Detector.js"></script>
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
 
     <script type="x-shader/x-vertex" id="vertexShader">
         // Vertex Shader code
@@ -28,17 +28,52 @@
         uniform vec4 uMouse;
         uniform sampler2D uTexture0;
 
-        float noise2d(in vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            f = f * f * (3.0 - 2.0 * f);
-            vec2 uv = vec2(i + f);
-            float h = texture2D(uTexture0, uv / 256.0).r;
-            return h * 2.0 - 1.0;
+        float raytracePlane(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            float t = -ro.y / rd.y;
+            if (t > tmin && t < tmax) {
+                return t;
+            }
+            return -1.0;
         }
 
         void main() {
-            gl_FragColor = vec4(vec3(noise2d(gl_FragCoord.xy)), 1.0);
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+
+            // eye rotation
+            vec3 eye = vec3(0.0, 1.0, 2.0);
+            vec2 rot = 6.2831 * (vec2(uGlobalTime * 0.025, 0.0) + vec2(1.0, 0.15) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(0.0, 1.0, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            // background
+            vec3 color = vec3(0.0);
+
+            float tmin = 0.1;
+            float tmax = 50.0;
+            float t = raytracePlane(ro, rd, tmin, tmax);
+            if (t > tmin && t < tmax) {
+                vec3 ppos = ro + rd * t;
+                color = 0.8 * texture2D(uTexture0, ppos.xz * 0.25).xyz;
+                color *= exp(-0.2 * t);
+            }
+
+            // gamma correction
+            vec3 gamma = vec3(1.0 / 2.2);
+            gl_FragColor = vec4(pow(color, gamma), 1.0);
         }
     </script>
 
@@ -71,8 +106,8 @@
             // add the camera to the scene
             scene.add(camera);
 
-            // load noise texture
-            var tex0 = THREE.ImageUtils.loadTexture("textures/noise2d.png");
+            // load texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
             tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
 
             // create a shader material
