@@ -1,0 +1,299 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Sphere scene Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+
+        vec3 sunColor = vec3(1.8, 1.2, 0.6);
+        vec3 skyColor = vec3(0.4, 0.6, 1.0);
+        vec3 sunLightColor = vec3(1.7, 1.25, 0.9);
+        vec3 skyLightColor = vec3(0.15, 0.2, 0.3);
+        vec3 indLightColor = vec3(0.4, 0.3, 0.2);
+        vec3 horizonColor = vec3(0.7, 0.75, 0.8);
+        vec3 fogColor = vec3(0.7, 0.8, 0.85);
+        vec3 sunDirection = normalize(vec3(0.0, 3.0, 5.0));
+
+        float sphereRadius = 0.5;
+        vec3 spherePos = vec3(0.0, sphereRadius, 0.5);
+        vec3 planePos = vec3(0.0, 0.12, 0.0);
+
+        float raytracePlane(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            vec3 p = ro - planePos;
+            float t = -p.y / rd.y;
+            if (t > tmin && t < tmax) {
+                return t;
+            }
+            return -1.0;
+        }
+
+        float raytraceSphere(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            vec3 ce = ro - spherePos;
+            float b = dot(rd, ce);
+            float c = dot(ce, ce) - (sphereRadius * sphereRadius);
+            float t = b * b - c;
+            if (t > tmin) {
+                t = -b - sqrt(t);
+                if (t < tmax)
+                    return t;
+            }
+            return -1.0;
+        }
+
+        vec4 texcube(in sampler2D tex, in vec3 pos, in vec3 norm, float k) {
+            vec3 m = pow(abs(norm), vec3(k));
+            vec3 d = spherePos - pos;
+            float lod = 0.25 * length(d);
+            vec4 x = texture2D(tex, pos.yz, lod);
+            vec4 y = texture2D(tex, pos.zx, lod);
+            vec4 z = texture2D(tex, pos.xy, lod);
+            return (x * m.x + y * m.y + z * m.z) / (m.x + m.y + m.z);
+        }
+
+        float shadowSphere(in vec3 ro, in vec3 rd) {
+            vec3 oc = spherePos - ro;
+            float b = dot(oc, rd);
+            float sh = 1.0;
+            if (b > 0.0) {
+                float h = dot(oc, oc) - (b * b) - (sphereRadius * sphereRadius);
+                sh = 2.0 * h / b;
+            }
+            return sh;
+        }
+
+        void main() {
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+
+            // eye rotation
+            vec3 eye = vec3(0.0, 1.0, 2.0);
+            vec2 rot = 6.2831 * (vec2(0.6 + uGlobalTime * 0.025, sin(uGlobalTime * 0.1) * 0.06) + vec2(1.0, 0.0) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(0.0, 1.0, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            vec3 norm;
+            vec3 color;
+            float occ = 1.0;
+
+            float tmin = 0.1;
+            float tmax = 50.0;
+
+            // raytrace the plane
+            float tpla = raytracePlane(ro, rd, tmin, tmax);
+            if (tpla > tmin) {
+                vec3 ppos = ro + rd * tpla - planePos;
+                norm = vec3(0.0, 1.0, 0.0);
+                vec3 d = spherePos - ppos;
+                float l = length(d);
+                occ = 1.0 - (dot(norm, d / l) * (sphereRadius * sphereRadius) / (l * l));
+                color = 0.8 * texture2D(uTexture0, ppos.xz * 0.25).xyz;
+            }
+
+            // raytrace the sphere
+            float tsph = raytraceSphere(ro, rd, tmin, tmax);
+            if (tsph > tmin) {
+                vec3 spos = ro + rd * tsph;
+                norm = normalize(spos - spherePos);
+                occ = 0.5 + 0.5 * norm.y;
+                color = 0.8 * texcube(uTexture0, spos, norm, 32.0).xyz;
+            }
+
+            // if we hit the plane or the sphere
+            if (tpla > tmin || tsph > tmin) {
+                // blinn phong
+                vec3 h = normalize(-rd + sunDirection);
+                float spe = pow(clamp(dot(h, norm), 0.0, 1.0), 16.0);
+                // light from sun direction
+                float sun = clamp(dot(sunDirection, norm), 0.0, 1.0);
+                // light from skydome
+                float sky = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
+                // indirect light reflected back in opposite direction of the sun
+                float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), norm), 0.0, 1.0);
+                // fresnel
+                float fre = pow(clamp(1.0 - dot(-rd, norm), 0.0, 1.0), 4.0);
+                vec3 lightColor = 1.0 * sun * sunLightColor * occ; // sunlight
+                lightColor += 0.6 * spe * sunLightColor * sun;     // specular
+                if (tsph < tmin) {
+                    vec3 ppos = ro + rd * tpla - planePos;
+                    float sha = clamp(shadowSphere(ppos, sunDirection), 0.0, 1.0);
+                    lightColor *= pow(vec3(sha), vec3(1.0)); // multiply sunlight by penumbra shadows
+                }
+                lightColor += 0.8 * sky * skyLightColor * occ; // add skylight
+                lightColor += 0.3 * ind * indLightColor * occ; // add backlight
+                lightColor += 0.2 * fre * sunLightColor * occ; // add reflection
+
+                color *= 1.0 * lightColor;
+
+                // distant fog if we don't hit the sphere
+                if (tsph < tmin) {
+                    color = mix(color, fogColor, 1.0 - exp(-0.0025 * tpla * tpla));
+                }
+            } else {
+                // the powerful sun dot
+                float sunDot = clamp(dot(sunDirection, rd), 0.0, 1.0);
+
+                // sky and sun
+                float sky = clamp(0.6 * (1.0 - 0.8 * rd.y), 0.0, 1.0);
+                color = sky * skyColor + pow(sunDot, 800.0) * sunColor;
+
+                // horizon
+                color = mix(color, horizonColor, pow(1.0 - rd.y, 4.0));
+            }
+
+            // gamma correction
+            vec3 gamma = vec3(1.0 / 2.2);
+            gl_FragColor = vec4(pow(color, gamma), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
