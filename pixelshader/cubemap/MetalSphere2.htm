@@ -1,6 +1,6 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Metal Sphere Pixel Shader</title>
+        <title>WebGL/GLSL - Metal Sphere 2 Pixel Shader</title>
         <meta charset="utf-8">
         <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
@@ -32,8 +32,8 @@
         vec3 ambientColor = vec3(0.8, 0.6, 0.4);
         vec3 diffuseColor = vec3(1.6, 1.2, 0.8);
         vec3 specularColor = vec3(1.2, 0.75, 0.3);
-        vec3 light1Dir = normalize(vec3(0.45, 0.15, -1.0));
-        vec3 light2Dir = normalize(vec3(-1.55, 0.3, 1.5));
+        vec3 light1Dir = normalize(vec3(2.35, 5.0, 1.5));
+        vec3 light2Dir = normalize(vec3(0.55, 1.8, 1.5));
 
         float sphereRadius = 1.0;
         vec3 spherePos = vec3(0.0, sphereRadius, 0.5);
@@ -169,42 +169,36 @@
         window.addEventListener('load', function() {
 
             var cubeMapImage = new Image();
-            cubeMapImage.src = "textures/cube00.png";
+            cubeMapImage.src = "textures/cube01.jpg";
 
-            function getCubeMapUrls() {
-                // We use the following mapping scheme to reference the tiles in the source image:
-                // Full cubemap tiles  xyz positions       Required tile sequence
-                // [ 0] [ 4] [ 8]      [  ] [py] [  ]      [ ] [2] [ ]
-                // [ 1] [ 5] [ 9]      [nx] [pz] [px]      [1] [4] [0]
-                // [ 2] [ 6] [10]      [  ] [ny] [  ]      [ ] [3] [ ]
-                // [ 3] [ 7] [11]      [  ] [nz] [  ]      [ ] [5] [ ]
+        function getCubeMapUrls() {
 
-                var cubeFaceIndices = [ 9, 1, 4, 6, 5, 7 ]; // xpos, xneg, ypos, yneg, zpos, zneg
+            // We use the following mapping scheme to reference the tiles in the source image:
+            // Full cubemap tiles     xyz positions          Required tile sequence
+            // [ 0] [ 3] [ 6] [ 9]    [  ] [py] [  ] [  ]    [ ] [2] [ ] [ ]
+            // [ 1] [ 4] [ 7] [10]    [nx] [pz] [px] [nz]    [1] [4] [0] [5]
+            // [ 2] [ 5] [ 8] [11]    [  ] [ny] [  ] [  ]    [ ] [3] [ ] [ ]
+            var cubeFaceIndices = [ 7, 1, 3, 5, 4, 10 ]; // xpos, xneg, ypos, yneg, zpos, zneg
 
-                var cubeMapPieces = [];
-                var textureWidth = cubeMapImage.width / 3;
-                var textureHeight = cubeMapImage.height / 4;
-                for(var x = 0; x < 3; x++) {
-                    for(var y = 0; y < 4; y++) {
-                        var canvas = document.createElement('canvas');
-                        canvas.width  = textureWidth;
-                        canvas.height = textureHeight;
-                        var context2d = canvas.getContext('2d');
-                        if (x == 1 && y == 3) { // flip zneg upside down
-                            context2d.translate(textureWidth, textureHeight);
-                            context2d.rotate(Math.PI);
-                        }
-                        context2d.drawImage(cubeMapImage, x * textureWidth, y * textureHeight, textureWidth, textureHeight, 0, 0, canvas.width, canvas.height);
-
-                        cubeMapPieces.push(canvas.toDataURL());
-                    }
+            var cubeMapPieces = [];
+            var textureWidth = cubeMapImage.width / 4;
+            var textureHeight = cubeMapImage.height / 3;
+            for(var x = 0; x < 4; x++) {
+                for(var y = 0; y < 3; y++) {
+                    var canvas = document.createElement('canvas');
+                    canvas.width  = textureWidth;
+                    canvas.height = textureHeight;
+                    var context2d = canvas.getContext('2d');
+                    context2d.drawImage(cubeMapImage, x * textureWidth, y * textureHeight, textureWidth, textureHeight, 0, 0, canvas.width, canvas.height);
+                    cubeMapPieces.push(canvas.toDataURL());
                 }
-                var urls = [];
-                for (var i = 0; i < 6; i++) { // select the right tiles for the 6 different faces of the cubemap
-                    urls.push(cubeMapPieces[cubeFaceIndices[i]]);
-                }
-                return urls;
             }
+            var urls = [];
+            for (var i = 0; i < 6; i++) { // select the right tiles for the 6 different faces of the cubemap
+                urls.push(cubeMapPieces[cubeFaceIndices[i]]);
+            }
+            return urls;
+        }
 
             // grab the container from the DOM
             container = document.getElementById("container");
