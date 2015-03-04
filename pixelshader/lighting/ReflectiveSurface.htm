@@ -30,7 +30,7 @@
         uniform samplerCube uTexture1;
 
         vec3 lightSpotColor = vec3(1.8, 1.2, 0.9);
-        vec3 ambientColor = vec3(0.6, 0.5, 0.4);
+        vec3 ambientColor = vec3(0.4, 0.3, 0.2);
         vec3 lightDir = normalize(vec3(6.0, 2.0, 2.0));
 
         float sphereRadius = 0.8;
@@ -207,7 +207,7 @@
                 vec3 spos = ro + rd * tsph;
                 norm = normalize(spos - spherePos);
                 occ = 0.5 + 0.5 * norm.y;
-                color = vec3(1.0, 0.0, 0.0) * occ;
+                color = vec3(0.3, 0.0, 0.0) * occ;
             }
 
             // if we hit the plane or the sphere
@@ -217,7 +217,7 @@
                 float amb = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
                 float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
                 float spe = specular(rd, norm, lightDir, roughness, fresnel);
-                float fre = fresnel * pow(clamp(dot(norm, -rd), 0.0, 1.0), 2.0);
+                float fre = fresnel * clamp(dot(norm, -rd), 0.0, 1.0);
                 float sha = 1.0;
                 if (tsph < tmin) {
                     vec3 ppos = ro + rd * tpla - planePos;
@@ -230,7 +230,8 @@
 
                 vec3 rgb = textureCube(uTexture1, reflect(rd, norm)).xyz * occ;
                 color += 1.0 * dif * sha * spe;          // specular
-                color = mix(pow(rgb, vec3(5.0)) * fre, color, 0.5);
+                color += pow(rgb, vec3(5.0)) * fre;
+
                 color *= 1.0 * light;
 
                 // distant fog if we don't hit the sphere
