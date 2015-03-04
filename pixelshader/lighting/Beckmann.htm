@@ -97,7 +97,7 @@
                 float spe = exp(tan2a / r2) / (r2 * cos2a * cos2a);
 
                 color = amb * ambientColor * occ;
-                color += dif * diffuseColor * occ;
+                color += dif * diffuseColor;
                 color += dif * spe * specularColor * occ;
             } else {
                 // colorize the light spot

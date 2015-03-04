@@ -98,7 +98,7 @@
                 float G = dot(-rd - norm * NdotV, norm - norm * NdotL);
                 float dif = max(0.0, NdotL) * (A + B * max(0.0, G) * sqrt((1.0 - NdotV * NdotV) * (1.0 - NdotL * NdotL)) / max(NdotL, NdotV));
 
-                color = vec3(amb * ambientColor + dif * diffuseColor) * occ;
+                color = vec3(amb * ambientColor * occ + dif * diffuseColor);
             } else {
                 // colorize the light spot
                 float light = clamp(dot(lightDir, rd), 0.0, 1.0);

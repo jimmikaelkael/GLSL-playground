@@ -144,7 +144,7 @@
 
                 float occ = clamp(raymarchAO(tpos, tnorm, 0.1), 0.0, 1.0);
                 float sha = 0.05 + clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
-                vec3 lightColor = 1.2 * sun * sunLightColor * occ; // sunlight
+                vec3 lightColor = 1.2 * sun * sunLightColor;       // sunlight
                 lightColor *= pow(vec3(sha), vec3(1.0, 1.0, 1.0)); // multiply sunlight by penumbra shadows
 
                 //color = tnorm;

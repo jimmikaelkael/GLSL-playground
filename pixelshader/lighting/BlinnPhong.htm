@@ -91,7 +91,7 @@
                 float spe = pow(clamp(dot(h, norm), 0.0, 1.0), 64.0);
 
                 color = amb * ambientColor * occ;
-                color += dif * diffuseColor * occ;
+                color += dif * diffuseColor;
                 color += dif * spe * specularColor * occ;
             } else {
                 float light = clamp(dot(lightDir, rd), 0.0, 1.0);

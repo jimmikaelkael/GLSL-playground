@@ -135,9 +135,9 @@
                 float spe2 = specular(rd, norm, light2Dir, roughness, fresnel);
                 float fre = fresnel + (1.0 - fresnel) * pow(1.0 - dot(norm, -rd), 5.0);
 
-                vec3 light1Color = dif1 * diffuseColor * occ;
+                vec3 light1Color = dif1 * diffuseColor;
                 light1Color += dif1 * spe1 * specularColor * occ;
-                vec3 light2Color = dif2 * diffuseColor * occ;
+                vec3 light2Color = dif2 * diffuseColor;
                 light2Color += dif2 * spe2 * specularColor * occ;
 
                 vec3 rgb = textureCube(uTexture1, reflect(rd, norm)).xyz;

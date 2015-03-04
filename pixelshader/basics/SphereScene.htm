@@ -147,8 +147,8 @@
                 float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), norm), 0.0, 1.0);
                 // fresnel
                 float fre = pow(clamp(1.0 - dot(-rd, norm), 0.0, 1.0), 4.0);
-                vec3 lightColor = 1.0 * sun * sunLightColor * occ; // sunlight
-                lightColor += 0.6 * spe * sunLightColor * sun;     // specular
+                vec3 lightColor = 1.0 * sun * sunLightColor;   // sunlight
+                lightColor += 0.6 * spe * sunLightColor * sun; // specular
                 if (tsph < tmin) {
                     vec3 ppos = ro + rd * tpla - planePos;
                     float sha = clamp(shadowSphere(ppos, sunDirection), 0.0, 1.0);

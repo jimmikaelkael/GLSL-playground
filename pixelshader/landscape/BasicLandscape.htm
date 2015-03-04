@@ -178,7 +178,7 @@
                 // raymarching penumbra shadows in sun direction
                 float sha = clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
                 // compute light color
-                vec3 lightColor = 1.2 * sun * sunLightColor * occ; // sunlight
+                vec3 lightColor = 1.2 * sun * sunLightColor;       // sunlight
                 lightColor *= pow(vec3(sha), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
                 lightColor += 0.7 * sky * skyLightColor * occ;     // add skylight
                 lightColor += 0.3 * ind * indLightColor * occ;     // add backlight

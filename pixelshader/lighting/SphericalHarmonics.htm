@@ -176,7 +176,7 @@
                 }
 
                 color = amb * ambientColor * occ;
-                color += dif * diffuseColor(norm, 0.5) * occ;
+                color += dif * diffuseColor(norm, 0.5);
                 color += dif * spe * specularColor * occ;
             } else {
                 // colorize the light spot

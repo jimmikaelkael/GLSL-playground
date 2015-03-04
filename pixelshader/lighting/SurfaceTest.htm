@@ -164,10 +164,10 @@
                     sha = clamp(shadowSphere(ppos, lightDir), 0.0, 1.0);
                 }
 
-                vec3 light = 1.0 * dif * lightColor * occ; // diffuse
-                light += 1.0 * dif * spe * occ;            // specular
-                light *= pow(vec3(sha), vec3(1.0));        // shadows
-                light += 0.2 * amb * lightColor * occ;     // ambient
+                vec3 light = 1.0 * dif * lightColor;    // diffuse
+                light += 1.0 * dif * spe * occ;         // specular
+                light *= pow(vec3(sha), vec3(1.0));     // shadows
+                light += 0.2 * amb * lightColor * occ;  // ambient
 
                 color *= 1.0 * light;
 
