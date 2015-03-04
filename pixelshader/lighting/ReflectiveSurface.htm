@@ -29,13 +29,13 @@
         uniform sampler2D uTexture0;
         uniform samplerCube uTexture1;
 
-        vec3 lightSpotColor = vec3(10.0);
-        vec3 lightColor = vec3(1.0, 1.0, 1.0);
-        vec3 lightDir = normalize(vec3(5.0, 4.5, 0.5));
+        vec3 lightSpotColor = vec3(1.8, 1.2, 0.9);
+        vec3 ambientColor = vec3(0.6, 0.5, 0.4);
+        vec3 lightDir = normalize(vec3(6.0, 2.0, 2.0));
 
         float sphereRadius = 0.8;
         vec3 spherePos = vec3(0.0, sphereRadius, 0.5);
-        vec3 planePos = vec3(0.0, 0.12, 0.0);
+        vec3 planePos = vec3(0.0, 0.08, 0.0);
 
         float raytracePlane(in vec3 ro, in vec3 rd, float tmin, float tmax) {
             vec3 p = ro - planePos;
@@ -68,6 +68,62 @@
                 sh = 2.0 * h / b;
             }
             return sh;
+        }
+
+        // Lighting is done by Spherical Harmonics:
+        // http://en.wikipedia.org/wiki/Spherical_harmonics
+        // This is a cheap lighting method presented in 2001 by Ravi Ramamoorthi
+        // and Pat Hanrahan: http://graphics.stanford.edu/papers/envmap/
+        // There's a C program (prefilter.c) provided to compute spherical harmonic
+        // coefficients from light probe images (in the floating point format).
+        // I used pvalue tool from Radiance package on my Ubuntu system to convert
+        // angular light probe images in HDR format to floating point format with
+        // the following command:
+        // $ pvalue -df -H -h probe_file.hdr > probe_file.float
+        // I then have slightly modified prefilter.c to output values with a factor
+        // applied to have coefficients in a correct range, and ran the following
+        // command:
+        // $ ./prefilter probe_file.float 640
+        // You can read too the Orange Book, chapter 12.3 (OpenGL Shading Language
+        // by Randi J. Rost), it has been very useful.
+        struct SHCoefficients {
+            vec3 L00, L1m1, L10, L11, L2m2, L2m1, L20, L21, L22;
+        };
+
+        // These constants have been calculated with a light probe from this website:
+        // http://www.pauldebevec.com/Probes/
+        // The light probe is called "Campus at Sunset" on the website.
+        SHCoefficients campus = SHCoefficients(
+            vec3(  0.7870665,  0.9379944,  0.9799986 ),
+            vec3(  0.4376419,  0.5579443,  0.7024107 ),
+            vec3( -0.1020717, -0.1824865, -0.2749662 ),
+            vec3(  0.4543814,  0.3750162,  0.1968642 ),
+            vec3(  0.1841687,  0.1396696,  0.0491580 ),
+            vec3( -0.1417495, -0.2186370, -0.3132702 ),
+            vec3( -0.3890121, -0.4033574, -0.3639718 ),
+            vec3(  0.0872238,  0.0744587,  0.0353051 ),
+            vec3(  0.6662600,  0.6706794,  0.5246173 )
+        );
+
+        vec3 diffuseColor(vec3 norm, float scale) {
+            SHCoefficients c = campus;
+            const float C1 = 0.429043;
+            const float C2 = 0.511664;
+            const float C3 = 0.743125;
+            const float C4 = 0.886227;
+            const float C5 = 0.247708;
+            return (
+                C1 * c.L22 * (norm.x * norm.x - norm.y * norm.y) +
+                C3 * c.L20 * norm.z * norm.z +
+                C4 * c.L00 -
+                C5 * c.L20 +
+                2.0 * C1 * c.L2m2 * norm.x * norm.y +
+                2.0 * C1 * c.L21  * norm.x * norm.z +
+                2.0 * C1 * c.L2m1 * norm.y * norm.z +
+                2.0 * C2 * c.L11  * norm.x +
+                2.0 * C2 * c.L1m1 * norm.y +
+                2.0 * C2 * c.L10  * norm.z
+            ) * scale;
         }
 
         float specular(in vec3 rd, in vec3 norm, in vec3 lightDir, float roughness, float fresnel) {
@@ -142,7 +198,7 @@
                 vec3 d = spherePos - ppos;
                 float l = length(d);
                 occ = 1.0 - (dot(norm, d / l) * (sphereRadius * sphereRadius) / (l * l));
-                color = vec3(0.20, 0.10, 0.05) * occ;
+                color = vec3(0.1, 0.15, 0.03) * occ;
             }
 
             // raytrace the sphere
@@ -157,7 +213,7 @@
             // if we hit the plane or the sphere
             if (tpla > tmin || tsph > tmin) {
                 float fresnel = 1.0;
-                float roughness = 0.0;
+                float roughness = 0.025;
                 float amb = clamp(0.5 + 0.5 * norm.y, 0.0, 1.0);
                 float dif = clamp(dot(lightDir, norm), 0.0, 1.0);
                 float spe = specular(rd, norm, lightDir, roughness, fresnel);
@@ -168,23 +224,25 @@
                     sha = clamp(shadowSphere(ppos, lightDir), 0.0, 1.0);
                 }
 
-                vec3 light = 1.0 * dif * lightColor * occ; // diffuse
-                light *= sha;                              // shadows
-                light += 0.4 * amb * lightColor * occ;     // ambient
+                vec3 light = 1.0 * dif * diffuseColor(norm, 2.0) * occ; // diffuse
+                light *= sha;                            // shadows
+                light += 1.0 * amb * ambientColor * occ; // ambient
 
                 vec3 rgb = textureCube(uTexture1, reflect(rd, norm)).xyz * occ;
-                color += 1.0 * dif * sha * spe;            // specular
-                color = mix(pow(rgb, vec3(8.0)) * fre, color, 0.5);
+                color += 1.0 * dif * sha * spe;          // specular
+                color = mix(pow(rgb, vec3(5.0)) * fre, color, 0.5);
                 color *= 1.0 * light;
 
-                // distant fog (black) if we don't hit the sphere
+                // distant fog if we don't hit the sphere
                 if (tsph < tmin) {
-                    color = mix(color, vec3(0.0), 1.0 - exp(-0.0025 * tpla * tpla));
+                    color = mix(color, vec3(0.7, 0.65, 0.6), 1.0 - exp(-0.0025 * tpla * tpla));
                 }
             } else {
                 // the light spot
                 float light = clamp(dot(lightDir, rd), 0.0, 1.0);
-                color = pow(light, 2000.0) * lightSpotColor;
+                color += pow(light, 200.0) * lightSpotColor;
+
+                color = mix(color, vec3(0.7, 0.65, 0.6), pow(1.0 - rd.y, 8.0));
             }
 
             // gamma correction
@@ -206,7 +264,7 @@
         window.addEventListener('load', function() {
 
             var cubeMapImage = new Image();
-            cubeMapImage.src = "textures/cube00.png";
+            cubeMapImage.src = "textures/cube01.png";
 
             function getCubeMapUrls() {
                 // We use the following mapping scheme to reference the tiles in the source image:
