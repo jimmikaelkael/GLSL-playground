@@ -1,0 +1,375 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Water Landscape Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+
+        vec3 sunColor = vec3(1.8, 1.0, 0.6);
+        vec3 skyColor = vec3(0.4, 0.6, 0.75);
+        vec3 sunLightColor = vec3(1.5, 1.25, 0.9);
+        vec3 skyLightColor = vec3(0.15, 0.2, 0.3);
+        vec3 indLightColor = vec3(0.4, 0.3, 0.2);
+        vec3 cloudsColor = vec3(1.0, 1.0, 1.0);
+        vec3 horizonColor = vec3(0.7, 0.75, 0.8);
+        vec3 fogColorB = vec3(0.7, 0.8, 0.9);
+        vec3 fogColorR = vec3(0.8, 0.7, 0.6);
+
+        vec3 sunDirection = normalize(vec3(0.6, 0.8, 0.5));
+
+        float cloudsHeight = 800.0;
+        float cloudsDensity = 0.3;
+        float cloudsCover = 0.2;
+
+        float maxmipmap = 100.0;
+
+        float noise2d(in vec2 p) {
+            return texture2D(uTexture0, p / 256.0, 0.0 - maxmipmap).x * 2.0 - 1.0;
+        }
+
+        float noise(in vec2 p) {
+            return texture2D(uTexture0, p / 256.0, 0.0 - maxmipmap).x;
+        }
+
+        float fBm(in vec2 p) {
+            float sum = 0.0;
+            float amp = 1.0;
+            for(int i = 0; i < 4; i++) {
+                sum += amp * noise2d(p);
+                amp *= 0.5;
+                p *= 2.0;
+            }
+            return sum;
+        }
+
+        float fBmC(in vec2 p) {
+            float sum = 0.0;
+            float amp = 1.0;
+            for(int i = 0; i < 5; i++) {
+                sum += amp * noise2d(p);
+                amp *= 0.5;
+                p *= 2.0;
+            }
+            return sum;
+        }
+
+        float fBmW(in vec2 p) {
+            float sum = 0.0;
+            float amp = 1.0;
+            for(int i = 0; i < 5; i++) {
+                sum += amp * noise2d(p);
+                amp *= 0.5;
+                p *= 2.0;
+            }
+            return sum * 0.1;
+        }
+
+        float raymarchTerrain(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
+            // terrain marching as explained by Inigo Quilez in his articles:
+            // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
+            float t = tmin;
+            for (int i = 0; i < 300; i++) {
+                vec3 p = ro + rd * t;
+                float d = p.y - fBm(p.xz);
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+                t += 0.2 * d;
+            }
+            return t;
+        }
+
+        vec3 getTerrainNormal(in vec3 p, float t) {
+            // computes terrain normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            float eps = 0.025;
+            return normalize(vec3(fBm(vec2(p.x - eps, p.z)) - fBm(vec2(p.x + eps, p.z)),
+                                  2.0 * eps,
+                                  fBm(vec2(p.x, p.z - eps)) - fBm(vec2(p.x, p.z + eps))));
+        }
+
+        vec3 getWaterNormal(in vec3 p, float t) {
+            // computes terrain normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            float eps = 0.025;
+            return normalize(vec3(fBmW(vec2(p.x - eps, p.z)) - fBmW(vec2(p.x + eps, p.z)),
+                                  2.0 * eps,
+                                  fBmW(vec2(p.x, p.z - eps)) - fBmW(vec2(p.x, p.z + eps))));
+        }
+
+        float raymarchAO(in vec3 ro, in vec3 rd, float tmin) {
+            // the technique is explained in one of IQ's presentations: NVScene 08 - Rendering Worlds With Two Triangles
+            // http://www.iquilezles.org/www/material/nvscene2008/rwwtt.pdf (pages 47 to 54, formula on page 53)
+            // the original basic technique was presented by Alex Evans in SIGGRAPH 2006 paper:
+            // http://developer.amd.com/wordpress/media/2012/10/Course_26_SIGGRAPH_2006.pdf (chapter 9)
+            float ao = 0.0;
+            for (float i = 0.0; i < 5.0; i++) {
+                float t = tmin + pow(i / 5.0, 2.0);
+                vec3 p = ro + rd * t;
+                float d = p.y - fBm(p.xz);
+                ao += max(0.0, t - 0.5 * d - 0.05);
+            }
+            return 1.0 - 0.4 * ao;
+        }
+
+        float raymarchShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            // penumbra shadows as described by IQ in article "free penumbra shadows
+            // for raymarching distance fields":
+            // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+            float sh = 1.0;
+            float t = tmin;
+            for(int i = 0; i < 50; i++) {
+                vec3 p = ro + rd * t;
+                float d = p.y - fBm(p.xz);
+                sh = min(sh, 16.0 * d / t);
+                t += 0.5 * d;
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+            }
+            return sh;
+        }
+
+        void main() {
+            vec2 p = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
+
+            // eye rotation
+            vec3 eye = vec3(1.0, 2.0, 1.0);
+            vec2 rot = 6.2831 * (vec2(0.0, 0.25) + vec2(1.0, 0.25) * (uMouse.xy - uResolution.xy * 0.5) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye + vec3(cos(uGlobalTime * 0.1) * 1.25, sin(uGlobalTime * 0.1) * 0.5 + 0.15, uGlobalTime * 0.5);
+            ro.y += 2.0;
+            vec3 ta = vec3(0.0, -0.75, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            // the powerful sun dot
+            float sunDot = clamp(dot(sunDirection, rd), 0.0, 1.0);
+
+            // terrain marching
+            float tmin = 0.1;
+            float tmax = 50.0;
+            float t = raymarchTerrain(ro, rd, tmin, tmax);
+            vec3 color;
+            if (t < tmax) {
+                // get position where the ray has hit
+                vec3 tpos = ro + rd * t;
+                // get terrain normal at that position
+                vec3 tnorm = getTerrainNormal(tpos, t);
+
+                // 3 lights rig as explained by Inigo Quilez in outdoor lighting article:
+                // http://www.iquilezles.org/www/articles/outdoorslighting/outdoorslighting.htm
+                // light from sun direction
+                float sun = clamp(dot(sunDirection, tnorm), 0.0, 1.0);
+                // light from skydome
+                float sky = clamp(0.5 + 0.5 * tnorm.y, 0.0, 1.0);
+                // indirect light reflected back in opposite direction of the sun
+                float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), tnorm), 0.0, 1.0);
+                // raymarching AO from position in its normal direction
+                float occ = clamp(raymarchAO(tpos, tnorm, 0.1), 0.0, 1.0);
+                // raymarching penumbra shadows in sun direction
+                float sha = clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
+                // compute light color
+                vec3 lightColor = 1.2 * sun * sunLightColor;       // sunlight
+                lightColor *= pow(vec3(sha), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
+                lightColor += 0.7 * sky * skyLightColor * occ;     // add skylight
+                lightColor += 0.3 * ind * indLightColor * occ;     // add backlight
+
+                if (tpos.y <= 0.2) {
+                    // water
+                    tpos += -rd * (tpos.y / rd.y);
+                    tpos += fBmW(tpos.xz + uGlobalTime * 0.2);
+                    tnorm = getWaterNormal(tpos, t);
+                    vec3 ref = reflect(rd, tnorm);
+                    vec2 p = tpos.xz + vec2(ref.x + ref.z, ref.y - ref.z);
+                    float surface = noise(p * 0.5) * noise(p) * noise(p * 4.0) * noise(p * 5.0) * noise(p * 6.0) * noise(p * 8.0);
+                    float sun = clamp(pow(dot(sunDirection, ref), 800.0), 0.0, 1.0);
+                    float sky = clamp(pow(0.5 + 0.5 * tnorm.y, 32.0), 0.0, 1.0);
+                    color = vec3(sky * 0.01 + sun *0.7 + 0.02 + surface, sky *0.02 + sun*0.6 + 0.05 + surface, sky*0.05 + sun*0.4 + 0.035 + surface);
+                } else {
+                    // rock
+                    color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7).xyz;
+                    color = mix(0.2 * vec3(0.25, 0.2, 0.15), color, 0.2); // gray with dots from noise
+                    color = mix(0.15 * vec3(0.25, 0.2, 0.15), color, texture2D(uTexture0, 0.002 * vec2(tpos.x + noise2d(tpos.xz) * 80.0, tpos.y * 8.0 + noise2d(tpos.xz) * 8.0)).x); // stripes
+                    color *= 1.0 * lightColor;
+                }
+
+                // fog: mixes a blue fog, and a red fog with sun amount
+                // this is described by IQ in his "Better Fog" article:
+                // http://www.iquilezles.org/www/articles/fog/fog.htm
+                vec3 fogColor = mix(fogColorB, fogColorR, pow(sunDot, 4.0));
+                color = mix(color, 0.8 * fogColor, 1.0 - exp(-0.0005 * t * t));
+
+
+            } else {
+                // sky and sun
+                float sky = clamp(0.6 * (1.0 - 0.8 * rd.y), 0.0, 1.0);
+                float diffuse = clamp(0.4 * sunDot, 0.0, 1.0);
+                color = sky * skyColor + pow(sunDot, 800.0) * sunColor + diffuse * skyLightColor;
+
+                // clouds
+                t = (cloudsHeight - ro.y) / rd.y;
+                if (t > 0.0) {
+                    vec3 pos = ro + rd * t;
+                    pos.z += uGlobalTime * 20.0;
+                    float clouds = fBmC(0.0025 * pos.xz) * cloudsDensity + cloudsCover;
+                    color = mix(color, mix(cloudsColor * 1.1, sunColor + diffuse * sunLightColor, 0.25), 0.8 * smoothstep(0.1, 0.9, clouds));
+                }
+
+                // horizon
+                color = mix(color, horizonColor, pow(1.0 - rd.y, 4.0));
+            }
+
+            // gamma correction
+            vec3 gamma = vec3(1.0 / 2.2);
+            gl_FragColor = vec4(pow(color, gamma), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load noise texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_gray.png");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
