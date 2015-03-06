@@ -50,8 +50,8 @@
             return texture2D(uTexture0, p / 256.0, 0.0 - maxmipmap).x * 2.0 - 1.0;
         }
 
-        float noise(in vec2 p) {
-            return texture2D(uTexture0, p / 256.0, 0.0 - maxmipmap).x;
+        float noiseW(in vec2 p) {
+            return texture2D(uTexture0, (p - 16.0) / 256.0, 0.0 - maxmipmap).x;
         }
 
         float fBm(in vec2 p) {
@@ -78,13 +78,13 @@
 
         float fBmW(in vec2 p) {
             float sum = 0.0;
-            float amp = 1.0;
+            float amp = 0.5;
             for(int i = 0; i < 5; i++) {
                 sum += amp * noise2d(p);
                 amp *= 0.5;
                 p *= 2.0;
             }
-            return sum * 0.1;
+            return sum * 0.2;
         }
 
         float raymarchTerrain(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
@@ -210,14 +210,14 @@
                 if (tpos.y <= 0.2) {
                     // water
                     tpos += -rd * (tpos.y / rd.y);
-                    tpos += fBmW(tpos.xz + uGlobalTime * 0.2);
+                    tpos += fBmW(tpos.xz + uGlobalTime * 0.15) - fBmW(tpos.xz + 32.0 - uGlobalTime * 0.15);
                     tnorm = getWaterNormal(tpos, t);
                     vec3 ref = reflect(rd, tnorm);
                     vec2 p = tpos.xz + vec2(ref.x + ref.z, ref.y - ref.z);
-                    float surface = noise(p * 0.5) * noise(p) * noise(p * 4.0) * noise(p * 5.0) * noise(p * 6.0) * noise(p * 8.0);
+                    float surface = noiseW(p * 0.5) * noiseW(p) * noiseW(p * 4.0) * noiseW(p * 5.0) * noiseW(p * 6.0) * noiseW(p * 8.0);
                     float sun = clamp(pow(dot(sunDirection, ref), 800.0), 0.0, 1.0);
                     float sky = clamp(pow(0.5 + 0.5 * tnorm.y, 32.0), 0.0, 1.0);
-                    color = vec3(sky * 0.01 + sun *0.7 + 0.02 + surface, sky *0.02 + sun*0.6 + 0.05 + surface, sky*0.05 + sun*0.4 + 0.035 + surface);
+                    color = vec3(sky * 0.01 + sun * 0.7 + 0.02 + surface, sky * 0.02 + sun * 0.6 + 0.05 + surface, sky * 0.05 + sun * 0.4 + 0.035 + surface);
                 } else {
                     // rock
                     color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7).xyz;
