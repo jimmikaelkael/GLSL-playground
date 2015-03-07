@@ -256,7 +256,7 @@
                     color = texture2D(uTexture0, tpos.xz * 0.7).xyz;
                     color = mix(0.2 * vec3(0.25, 0.2, 0.15), color, 0.2); // gray with dots from noise
                     color = mix(0.15 * vec3(0.25, 0.2, 0.15), color, 2.0 * texture2D(uTexture0, 0.002 * vec2(tpos.x + noise2d(tpos.xz) * 80.0, tpos.y * 80.0 + noise2d(tpos.xz) * 8.0)).x); // stripes
-                    color = mix(0.15 * vec3(0.15, 0.2, 0.05), color, (tpos.y + 0.1)); // alga
+                    color = mix(0.15 * vec3(0.15, 0.2, 0.05), color, tpos.y); // alga
                     color *= 1.0 * lightColor;
                 }
 
@@ -284,6 +284,8 @@
                 // horizon
                 color = mix(color, horizonColor, pow(1.0 - rd.y, 4.0));
             }
+
+            color = mix(color, smoothstep(0.0, 1.0, color), 0.5);
 
             // gamma correction
             vec3 gamma = vec3(1.0 / 2.2);
