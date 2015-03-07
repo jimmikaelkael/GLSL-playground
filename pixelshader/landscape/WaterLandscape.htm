@@ -201,7 +201,7 @@
             if (t < tmax) {
                 // get terrain position where the ray has hit
                 vec3 tpos = ro + rd * t;
-                if (tpos.y < 0.15) {
+                if (tpos.y < 0.15 - sin(uGlobalTime) * 0.005) {
                     // adjusting water position
                     tpos += -rd * (tpos.y / rd.y);
                     tpos += fBmW(tpos.xz + uGlobalTime * 0.15) - fBmW(tpos.xz + 32.0 - uGlobalTime * 0.15);
@@ -214,17 +214,22 @@
                     // water surface noise
                     float surface = noiseW(p * 0.5) * noiseW(p) * noiseW(p * 4.0) * noiseW(p * 5.0) * noiseW(p * 6.0) * noiseW(p * 8.0);
                     // light relecting from skydome
-                    float sky = clamp(pow(0.5 + 0.5 * tnorm.y, 32.0), 0.0, 1.0);
+                    float sky = clamp(pow(0.5 + 0.5 * tnorm.y, 64.0), 0.0, 1.0);
                     // water AO
                     float occ = clamp(raymarchAOW(tpos, tnorm, 0.25), 0.0, 1.0);
                     // terrain shadows on water
                     float sha = 0.25 * clamp(raymarchShadow(tpos, sunDirection, 0.5, 50.0), 0.0, 1.0);
                     // amount of sun reflecting
                     float sun = 10.0 * sha * clamp(pow(dot(sunDirection, ref), 1000.0), 0.0, 1.0);
-
                     // water
                     color = vec3(sky * 0.01 + sun * 0.7 + 0.02 + surface, sky * 0.02 + sun * 0.6 + 0.05 + surface, sky * 0.05 + sun * 0.4 + 0.035 + surface) * occ;
                     color = mix(color, pow(vec3(sha), vec3(1.0, 0.8, 0.8)), 0.05);
+                    // foam
+                    float foam = fBmC(32.0 * tpos.xz) * 0.4 + 0.2;
+                    color = mix(color, 0.75 * vec3(1.0), 0.5 * smoothstep(0.65 + cos(uGlobalTime) * 0.01, 1.0, foam));
+                    foam = fBmC(16.0 * tpos.xz) * 0.3 + 0.2;
+                    color = mix(color, 0.75 * vec3(1.0), 0.5 * smoothstep(0.42 + cos(uGlobalTime) * 0.01, 1.0, foam));
+
                 } else {
                     // get terrain normal at that position
                     vec3 tnorm = getTerrainNormal(tpos, t);
@@ -248,9 +253,10 @@
                     lightColor += 0.3 * ind * indLightColor * occ;     // add backlight
 
                     // rock
-                    color = 0.2 * texture2D(uTexture0, tpos.xz * 0.7).xyz;
+                    color = texture2D(uTexture0, tpos.xz * 0.7).xyz;
                     color = mix(0.2 * vec3(0.25, 0.2, 0.15), color, 0.2); // gray with dots from noise
-                    color = mix(0.15 * vec3(0.25, 0.2, 0.15), color, texture2D(uTexture0, 0.002 * vec2(tpos.x + noise2d(tpos.xz) * 80.0, tpos.y * 8.0 + noise2d(tpos.xz) * 8.0)).x); // stripes
+                    color = mix(0.15 * vec3(0.25, 0.2, 0.15), color, 2.0 * texture2D(uTexture0, 0.002 * vec2(tpos.x + noise2d(tpos.xz) * 80.0, tpos.y * 80.0 + noise2d(tpos.xz) * 8.0)).x); // stripes
+                    color = mix(0.15 * vec3(0.15, 0.2, 0.05), color, (tpos.y + 0.1)); // alga
                     color *= 1.0 * lightColor;
                 }
 
