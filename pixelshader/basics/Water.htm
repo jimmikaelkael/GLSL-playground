@@ -1,0 +1,277 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Water Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+        uniform samplerCube uTexture1;
+
+        float noise(in vec2 p) {
+            return texture2D(uTexture0, p / 256.0, -100.0).x;
+        }
+
+        float fBm(in vec2 p) {
+            float sum = 0.0;
+            float amp = 0.5;
+            for(int i = 0; i < 5; i++) {
+                sum += amp * noise(p);
+                amp *= 0.5;
+                p *= 2.0;
+            }
+            return sum * 0.05;
+        }
+
+        float raymarchWater(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
+            // water raymarching as explained by Inigo Quilez in his articles:
+            // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
+            float t = tmin;
+            for (int i = 0; i < 70; i++) {
+                vec3 p = ro + rd * t;
+                float d = p.y - fBm(vec2(p.xz + uGlobalTime));
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+                t += 0.2 * d;
+             }
+             return t;
+        }
+
+        vec3 getWaterNormal(in vec3 p, float t) {
+            // computes water normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            float eps = 0.025;
+            return normalize(vec3(fBm(vec2(p.x - eps, p.z)) - fBm(vec2(p.x + eps, p.z)),
+                                  2.0 * eps,
+                                  fBm(vec2(p.x, p.z - eps)) - fBm(vec2(p.x, p.z + eps))));
+        }
+
+        void main() {
+	    vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.xy;
+
+            // eye rotation
+            vec3 eye = vec3(0.0, 2.0, -1.0);
+            vec2 rot = 6.2831 * (vec2(0.0, 0.0) + vec2(1.0, 0.0) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(0.0, 2.0, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            // background color from the cube
+            vec3 col = textureCube(uTexture1, rd).xyz;
+
+            // water marching
+            float tmin = 0.1;
+            float tmax = 24.0;
+            float t = raymarchWater(ro, rd, tmin, tmax);
+            if (t > tmin && t < tmax) {
+                // get position where the ray has hit
+                vec3 pos = ro + rd * t;
+                // move position to create wave effect
+                pos += uGlobalTime * 0.25;
+
+                // get water normal at that position
+                vec3 nor = getWaterNormal(pos, t);
+
+                float F = 0.75;
+                float fre = F + (1.0 - F) * pow(1.0 - dot(nor, -rd), 5.0); // fresnel term
+                vec3 refl = reflect(rd, nor);       // relection
+                vec3 refr = refract(rd, nor, 0.99); // refraction
+                vec3 rgb = textureCube(uTexture1, refl).xyz;
+                col = mix(vec3(0.2), (1.0 - fre) + rgb * fre, fre);
+                rgb = textureCube(uTexture1, refr).xyz;
+                col = mix(col, rgb, 0.5);
+                col = mix(col, smoothstep(0.0, 1.0, col), 0.5);
+            }
+
+            gl_FragColor = vec4(col, 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            var cubeMapImage = new Image();
+            cubeMapImage.src = "textures/cube00.png";
+
+            function getCubeMapUrls() {
+                // We use the following mapping scheme to reference the tiles in the source image:
+                // Full cubemap tiles  xyz positions       Required tile sequence
+                // [ 0] [ 4] [ 8]      [  ] [py] [  ]      [ ] [2] [ ]
+                // [ 1] [ 5] [ 9]      [nx] [pz] [px]      [1] [4] [0]
+                // [ 2] [ 6] [10]      [  ] [ny] [  ]      [ ] [3] [ ]
+                // [ 3] [ 7] [11]      [  ] [nz] [  ]      [ ] [5] [ ]
+
+                var cubeFaceIndices = [ 9, 1, 4, 6, 5, 7 ]; // xpos, xneg, ypos, yneg, zpos, zneg
+
+                var cubeMapPieces = [];
+                var textureWidth = cubeMapImage.width / 3;
+                var textureHeight = cubeMapImage.height / 4;
+                for(var x = 0; x < 3; x++) {
+                    for(var y = 0; y < 4; y++) {
+                        var canvas = document.createElement('canvas');
+                        canvas.width  = textureWidth;
+                        canvas.height = textureHeight;
+                        var context2d = canvas.getContext('2d');
+                        if (x == 1 && y == 3) { // flip zneg upside down
+                            context2d.translate(textureWidth, textureHeight);
+                            context2d.rotate(Math.PI);
+                        }
+                        context2d.drawImage(cubeMapImage, x * textureWidth, y * textureHeight, textureWidth, textureHeight, 0, 0, canvas.width, canvas.height);
+
+                        cubeMapPieces.push(canvas.toDataURL());
+                    }
+                }
+                var urls = [];
+                for (var i = 0; i < 6; i++) { // select the right tiles for the 6 different faces of the cubemap
+                    urls.push(cubeMapPieces[cubeFaceIndices[i]]);
+                }
+                return urls;
+            }
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load noise texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_gray.png");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type: "t", value: tex0 },
+                    uTexture1: { type: "t", value: THREE.ImageUtils.loadTextureCube(getCubeMapUrls()) }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
