@@ -29,7 +29,15 @@
         uniform sampler2D uTexture0;
 
         float noise(in vec2 p) {
-            return 0.5 * texture2D(uTexture0, p / 256.0).x;
+            // value noise: http://en.wikipedia.org/wiki/Value_noise
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float a = 0.5 * texture2D(uTexture0,(i + vec2(0.5, 0.5)) / 256.0, -100.0).x;
+            float b = 0.5 * texture2D(uTexture0,(i + vec2(1.5, 0.5)) / 256.0, -100.0).x;
+            float c = 0.5 * texture2D(uTexture0,(i + vec2(0.5, 1.5)) / 256.0, -100.0).x;
+            float d = 0.5 * texture2D(uTexture0,(i + vec2(1.5, 1.5)) / 256.0, -100.0).x;
+            f = f * f * (3.0 - 2.0 * f);
+            return a + (b - a) * f.x + (c - a) * f.y + (a - b - c + d) * f.x * f.y;
         }
 
         float fBm(in vec2 p) {
