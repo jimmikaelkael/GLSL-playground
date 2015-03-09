@@ -1,0 +1,171 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Fractional Brownian Motion Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+
+        float noise(in vec2 p) {
+            return 0.5 * texture2D(uTexture0, p / 256.0).x;
+        }
+
+        float fBm(in vec2 p) {
+            // Fractional Brownian Motion
+            // https://code.google.com/p/fractalterraingeneration/wiki/Fractional_Brownian_Motion
+            float sum = 0.0;
+            float amp = 1.0;
+            for(int i = 0; i < 8; i++) {
+                sum += amp * noise(p);
+                amp *= 0.5;
+                p *= 2.0;
+            }
+            return sum;
+        }
+
+        void main() {
+            // get screen coordinates of the fragment
+            vec2 p = vec2(gl_FragCoord.xy);
+            // noise scale
+            float scale = 0.01;
+            gl_FragColor = vec4(vec3(fBm(scale * p)), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load noise texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_gray.png");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
