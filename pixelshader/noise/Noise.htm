@@ -28,12 +28,13 @@
         uniform vec4 uMouse;
         uniform sampler2D uTexture0;
 
-        float noise2d(in vec2 p) {
-            return texture2D(uTexture0, p / 256.0).x * 2.0 - 1.0;
+        float noise(in vec2 p) {
+            return texture2D(uTexture0, p / 256.0).x;
         }
 
         void main() {
-            gl_FragColor = vec4(vec3(noise2d(gl_FragCoord.xy)), 1.0);
+            // simply output color from noise texture
+            gl_FragColor = vec4(vec3(noise(gl_FragCoord.xy)), 1.0);
         }
     </script>
 
