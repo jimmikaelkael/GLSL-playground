@@ -1,0 +1,244 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Glass Sphere Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform samplerCube uTexture0;
+
+        float sphereRadius = 1.0;
+        vec3 spherePos = vec3(0.0, sphereRadius, 0.25);
+
+        float raymarchSphere(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
+            // terrain marching as explained by Inigo Quilez in his articles:
+            // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
+            float t = tmin;
+            for (int i = 0; i < 32; i++) {
+                vec3 p = ro - spherePos + rd * t;
+                float d = length(p) - sphereRadius;
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+                t += 0.5 * d;
+            }
+            return t;
+        }
+
+        void main() {
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+
+            // eye rotation
+            vec3 eye = vec3(0.0, 1.0, 2.0);
+            vec2 rot = 6.2831 * (vec2(0.6 + uGlobalTime * 0.025, sin(uGlobalTime * 0.1) * 0.06) + vec2(1.0, 0.0) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(0.0, 1.0, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 0.75));
+
+            // background color from the cube
+            vec3 color = pow(textureCube(uTexture0, rd).xyz, vec3(2.0));
+
+            // raymarch the sphere
+            float tmin = 0.1;
+            float tmax = 10.0;
+            float tsph = raymarchSphere(ro, rd, tmin, tmax);
+            if (tsph > tmin && tsph < tmax) {
+                vec3 pos = ro + rd * tsph;
+                vec3 norm = normalize(pos - spherePos);
+
+                float refrIndex = 1.5; // refractive index of the glass
+                vec3 refr = refract(-rd, norm, 1.0 / refrIndex);
+                color = pow(textureCube(uTexture0, refr).xyz, vec3(2.0));
+                color = mix(color, smoothstep(0.0, 1.0, color), 0.5);
+
+                // gamma correction
+                vec3 gamma = vec3(1.0 / 2.2);
+                color = pow(color, gamma);
+            }
+
+            gl_FragColor = vec4(color, 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            var cubeMapImage = new Image();
+            cubeMapImage.src = "textures/cube00.png";
+
+            function getCubeMapUrls() {
+                // We use the following mapping scheme to reference the tiles in the source image:
+                // Full cubemap tiles  xyz positions       Required tile sequence
+                // [ 0] [ 4] [ 8]      [  ] [py] [  ]      [ ] [2] [ ]
+                // [ 1] [ 5] [ 9]      [nx] [pz] [px]      [1] [4] [0]
+                // [ 2] [ 6] [10]      [  ] [ny] [  ]      [ ] [3] [ ]
+                // [ 3] [ 7] [11]      [  ] [nz] [  ]      [ ] [5] [ ]
+
+                var cubeFaceIndices = [ 9, 1, 4, 6, 5, 7 ]; // xpos, xneg, ypos, yneg, zpos, zneg
+
+                var cubeMapPieces = [];
+                var textureWidth = cubeMapImage.width / 3;
+                var textureHeight = cubeMapImage.height / 4;
+                for(var x = 0; x < 3; x++) {
+                    for(var y = 0; y < 4; y++) {
+                        var canvas = document.createElement('canvas');
+                        canvas.width  = textureWidth;
+                        canvas.height = textureHeight;
+                        var context2d = canvas.getContext('2d');
+                        if (x == 1 && y == 3) { // flip zneg upside down
+                            context2d.translate(textureWidth, textureHeight);
+                            context2d.rotate(Math.PI);
+                        }
+                        context2d.drawImage(cubeMapImage, x * textureWidth, y * textureHeight, textureWidth, textureHeight, 0, 0, canvas.width, canvas.height);
+
+                        cubeMapPieces.push(canvas.toDataURL());
+                    }
+                }
+                var urls = [];
+                for (var i = 0; i < 6; i++) { // select the right tiles for the 6 different faces of the cubemap
+                    urls.push(cubeMapPieces[cubeFaceIndices[i]]);
+                }
+                return urls;
+            }
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type: "t", value: THREE.ImageUtils.loadTextureCube(getCubeMapUrls()) }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
