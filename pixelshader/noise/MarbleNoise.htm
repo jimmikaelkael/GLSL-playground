@@ -1,6 +1,6 @@
 <html lang="en">
     <head>
-        <title>WebGL/GLSL - Normals (Analytical & Numerical) Pixel Shader</title>
+        <title>WebGL/GLSL - Marble Noise Pixel Shader</title>
         <meta charset="utf-8">
         <link rel="stylesheet" type="text/css" href="../../css/styles.css">
     </head>
@@ -28,118 +28,43 @@
         uniform vec4 uMouse;
         uniform sampler2D uTexture0;
 
-        vec3 noise(in vec2 p) {
+        float noise(in vec2 p) {
             // value noise: http://en.wikipedia.org/wiki/Value_noise
-            // and it's analytical derivatives
             vec2 i = floor(p);
             vec2 f = fract(p);
-            float a = 0.5 * texture2D(uTexture0,(i + vec2(0.5, 0.5)) / 256.0, -100.0).x;
-            float b = 0.5 * texture2D(uTexture0,(i + vec2(1.5, 0.5)) / 256.0, -100.0).x;
-            float c = 0.5 * texture2D(uTexture0,(i + vec2(0.5, 1.5)) / 256.0, -100.0).x;
-            float d = 0.5 * texture2D(uTexture0,(i + vec2(1.5, 1.5)) / 256.0, -100.0).x;
+            float a = texture2D(uTexture0,(i + vec2(0.5, 0.5)) / 256.0, -100.0).x;
+            float b = texture2D(uTexture0,(i + vec2(1.5, 0.5)) / 256.0, -100.0).x;
+            float c = texture2D(uTexture0,(i + vec2(0.5, 1.5)) / 256.0, -100.0).x;
+            float d = texture2D(uTexture0,(i + vec2(1.5, 1.5)) / 256.0, -100.0).x;
+
             vec2 u = f * f * (3.0 - 2.0 * f);
-            return vec3(a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y,
-                        6.0 * f * (1.0 - f) * (vec2(b - a, c - a) + (a - b - c + d) * u.yx));
+            return a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y;
         }
 
-        vec4 fBm(in vec2 p) {
+        float fBm(in vec2 p) {
             float sum = 0.0;
             float amp = 1.0;
-            vec2 dsum = vec2(0.0);
-            for(int i = 0; i < 5; i++) {
-                vec3 n = noise(p);
-                sum += amp * n.x;
-                dsum += amp * n.yz;
+            for(int i = 0; i < 6; i++) {
+                sum += amp * noise(p);
                 amp *= 0.5;
                 p *= 2.0;
             }
-
-            // noise scaling
-            sum *= 2.0;
-            dsum *= 2.0;
-
-            return vec4(sum, normalize(vec3(-dsum.x, 1.0, -dsum.y)));
-        }
-
-        vec4 raymarchTerrain(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
-            // terrain marching as explained by Inigo Quilez in his articles:
-            // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
-            float t = tmin;
-            vec4 res = vec4(-1.0);
-            for (int i = 0; i < 90; i++) {
-                vec3 p = ro + rd * t;
-                vec4 n = fBm(p.xz);
-                float d = p.y - n.x;
-                res = vec4(t, n.yzw);
-                if (d < (0.001 * t) || t > tmax)
-                    break;
-                t += (0.001 + n.z) * 0.5 * d;
-            }
-            return res;
-        }
-
-        vec3 getTerrainNormal(in vec3 p) {
-            // computes terrain normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
-            // the method is explained by Inigo Quilez in his article on terrain marching.
-            float eps = 0.1;
-            return normalize(vec3(fBm(vec2(p.x - eps, p.z)).x - fBm(vec2(p.x + eps, p.z)).x,
-                                  2.0 * eps,
-                                  fBm(vec2(p.x, p.z - eps)).x - fBm(vec2(p.x, p.z + eps)).x));
+            return sum;
         }
 
         void main() {
-            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+            vec2 p = vec2(gl_FragCoord.xy);
 
-            // eye rotation
-            vec3 eye = vec3(0.0, 1.0, 2.0);
-            vec2 rot = 6.2831 * (vec2(0.0, 0.0) + vec2(1.0, 0.15) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
-            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
-            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+            float scale = 0.025; // noise scale
+            float freq = 0.5;    // marble pattern frequency
+            float amp = 16.0;    // marble amplitude
+            float xPeriod = 8.0;
+            float yPeriod = 4.0;
 
-            // origin displacement and view direction
-            vec3 ro = eye;
-            ro.y += 1.5;
-            vec3 ta = vec3(0.0, -0.25, 0.0);
+            p *= scale;
+            float marble = abs(sin(freq *(p.x * xPeriod + p.y * yPeriod + amp * fBm(p))));
 
-            // build camera matrix, I suggest reading the following for camera to world transformation:
-            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
-            vec3 cw = normalize(ta - eye);
-            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
-            vec3 cv = normalize(cross(cw, cu));
-            mat3 cam = mat3(cu, cv, cw);
-
-            // compute ray direction
-            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
-
-            // background
-            vec3 color = vec3(0.0);
-
-            // terrain marching
-            float tmin = 0.1;
-            float tmax = 50.0;
-            vec4 ter = raymarchTerrain(ro, rd, tmin, tmax);
-            float t = ter.x;
-            if (t < tmax) {
-                if (p.x < 0.0) { // analytical normals on left side
-                    vec3 nor = ter.yzw;
-                    color = nor;
-                } else { // numerically computed normals on right side
-                    // get position where the ray has hit
-                    vec3 pos = ro + rd * t;
-                    vec3 nor = getTerrainNormal(pos);
-                    color = nor;
-                }
-                color *= exp(-0.02 * t * t);
-            }
-
-            // the white line
-            if (p.x > -0.005 && p.x < 0.005 ) {
-                color = vec3(1.0);
-            }
-
-            // gamma correction
-            vec3 gamma = vec3(1.0 / 2.2);
-            gl_FragColor = vec4(pow(color, gamma), 1.0);
+            gl_FragColor = vec4(vec3(marble), 1.0);
         }
     </script>
 
