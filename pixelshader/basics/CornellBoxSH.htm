@@ -1,0 +1,401 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Cornell Box with Spherical Harmonics Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+
+        const float ID_NONE        = -1.0;
+        const float ID_FLOOR       =  0.10;
+        const float ID_CEILING     =  0.11;
+        const float ID_WALL_BACK   =  0.12;
+        const float ID_WALL_RIGHT  =  0.13;
+        const float ID_WALL_LEFT   =  0.14;
+        const float ID_LIGHT       =  0.15;
+        const float ID_BLOCK_SHORT =  0.16;
+        const float ID_BLOCK_TALL  =  0.17;
+
+        const float ID_VOID        =  1.0;
+
+        // http://www.graphics.cornell.edu/online/box/data.html
+        const vec4 FLOOR       = vec4(278.0, 0.0, 279.6, ID_FLOOR);
+        const vec4 CEILING     = vec4(278.0, 0.0, 279.6, ID_CEILING);
+        const vec4 WALL_BACK   = vec4(278.0, 274.4, 0.0, ID_WALL_BACK);
+        const vec4 WALL_RIGHT  = vec4(0.0, 274.4, 279.6, ID_WALL_RIGHT);
+        const vec4 WALL_LEFT   = vec4(0.0, 274.4, 279.6, ID_WALL_LEFT);
+        const vec4 LIGHT       = vec4(65.0, 0.0, 52.5, ID_LIGHT);
+        const vec4 BLOCK_SHORT = vec4(80.0, 82.5, 80.0, ID_BLOCK_SHORT);
+        const vec4 BLOCK_TALL  = vec4(80.0, 165.0, 80.0, ID_BLOCK_TALL);
+
+        vec3 lightPos = vec3(278.0, 0.0, 279.6);
+
+        float sdBox(in vec3 p, in vec3 box) {
+            // signed box distance function, check out IQ's page
+            // for a list of useful distance functions:
+            // http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+            vec3 d = abs(p) - box;
+            return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
+        }
+
+        vec3 rotateY(in vec3 p, float an) {
+            float c = cos(an);
+            float s = sin(an);
+            return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+        }
+
+        vec2 mapObject(in vec3 p) {
+            // hit object ID is stored in res.x, distance to object is in res.y
+
+            vec2 res = vec2(ID_VOID, 2000.0);
+
+            vec2 obj = vec2(ID_LIGHT, sdBox(p + lightPos, LIGHT.xyz));
+            if (obj.y < res.y) res = obj;
+
+            obj = vec2(ID_FLOOR, sdBox(p + vec3(278.0, 548.8, 279.6), FLOOR.xyz));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(ID_CEILING, sdBox(p + vec3(278.0, 0.0, 279.6), CEILING.xyz));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(ID_WALL_BACK, sdBox(p + vec3(278.0, 274.4, 559.2), WALL_BACK.xyz));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(ID_WALL_RIGHT, sdBox(p + vec3(556.0, 274.4, 279.6), WALL_RIGHT.xyz));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(ID_WALL_LEFT, sdBox(p + vec3(0.0, 274.4, 279.6), WALL_LEFT.xyz));
+            if (obj.y < res.y) res = obj;
+
+            obj = vec2(ID_BLOCK_SHORT, sdBox(rotateY(p + vec3(370.0, 466.3, 166.0), -0.3), BLOCK_SHORT.xyz));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(ID_BLOCK_TALL, sdBox(rotateY(p + vec3(190.0, 383.3, 410.0), 0.3), BLOCK_TALL.xyz));
+            if (obj.y < res.y) res = obj;
+
+            return res;
+        }
+
+        vec2 raymarchScene(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
+            // scene raymarching as explained by Inigo Quilez in his articles:
+            // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
+            vec3 res = vec3(ID_NONE);
+            float t = tmin;
+            for (int i = 0; i < 250; i++) {
+                vec3 p = ro + rd * t;
+                res = vec3(mapObject(p), t);
+                float d = res.y;
+                if (d < (0.0001 * t) || t > tmax)
+                    break;
+                t += 0.5 * d;
+            }
+            return res.xz;
+        }
+
+        vec3 getNormal(in vec3 p) {
+            // computes scene normal with central differences: http://en.wikipedia.org/wiki/Finite_difference<img src="file:///C:\Users\E-MEDIA\AppData\Local\Temp\gzwh3g76.bmp" />
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            vec2 eps = vec2(0.001, 0.0);
+            return normalize(vec3(mapObject(p + eps.xyy).y - mapObject(p - eps.xyy).y,
+                                  mapObject(p + eps.yxy).y - mapObject(p - eps.yxy).y,
+                                  mapObject(p + eps.yyx).y - mapObject(p - eps.yyx).y));
+        }
+
+        float raymarchAO(in vec3 ro, in vec3 rd, float tmin) {
+            // the technique is explained in one of IQ's presentations: NVScene 08 - Rendering Worlds With Two Triangles
+            // http://www.iquilezles.org/www/material/nvscene2008/rwwtt.pdf (pages 47 to 54, formula on page 53)
+            // the original basic technique was presented by Alex Evans in SIGGRAPH 2006 paper:
+            // http://developer.amd.com/wordpress/media/2012/10/Course_26_SIGGRAPH_2006.pdf (chapter 9)
+            float ao = 0.0;
+            for (float i = 0.0; i < 5.0; i++) {
+                float t = tmin + pow(i / 5.0, 2.0);
+                vec3 p = ro + rd * t;
+                float d = mapObject(p).y;
+                ao += max(0.0, t - 0.5 * d - 0.05);
+            }
+            return 1.0 - 0.0009 * ao;
+        }
+
+        // Lighting is done by Spherical Harmonics:
+        // http://en.wikipedia.org/wiki/Spherical_harmonics
+        // This is a cheap lighting method presented in 2001 by Ravi Ramamoorthi
+        // and Pat Hanrahan: http://graphics.stanford.edu/papers/envmap/
+        // There's a C program (prefilter.c) provided to compute spherical harmonic
+        // coefficients from light probe images (in the floating point format).
+        // I used pvalue tool from Radiance package on my Ubuntu system to convert
+        // angular light probe images in HDR format to floating point format with
+        // the following command:
+        // $ pvalue -df -H -h probe_file.hdr > probe_file.float
+        // I then have slightly modified prefilter.c to output values with a factor
+        // applied to have coefficients in a correct range, and ran the following
+        // command:
+        // $ ./prefilter probe_file.float 1800
+        // You can read too the Orange Book, chapter 12.3 (OpenGL Shading Language
+        // by Randi J. Rost), it has been very useful.
+        struct SHCoefficients {
+            vec3 L00, L1m1, L10, L11, L2m2, L2m1, L20, L21, L22;
+        };
+
+        // These constants have been calculated with a light probe from this website:
+        // http://www.unparent.com/photos_probes.html
+        // The light probe is called "outside my apartment" on the website.
+        SHCoefficients outside = SHCoefficients(
+            vec3(  0.7038698,  0.8078909,  1.0664997 ),
+            vec3(  0.4541330,  0.5645211,  0.8553988 ),
+            vec3(  0.2943725,  0.3295115,  0.4464577 ),
+            vec3(  0.4771259,  0.5128749,  0.5787071 ),
+            vec3(  0.5752824,  0.6244893,  0.7150115 ),
+            vec3(  0.1313621,  0.2124211,  0.4307492 ),
+            vec3( -0.3124286, -0.3476581, -0.4390439 ),
+            vec3(  0.1886868,  0.2103416,  0.2551100 ),
+            vec3(  0.0868131,  0.0724930,  0.0100443 )
+        );
+
+        vec3 diffuseColor(vec3 norm, float scale) {
+            SHCoefficients c = outside;
+            const float C1 = 0.429043;
+            const float C2 = 0.511664;
+            const float C3 = 0.743125;
+            const float C4 = 0.886227;
+            const float C5 = 0.247708;
+            return (
+                C1 * c.L22 * (norm.x * norm.x - norm.y * norm.y) +
+                C3 * c.L20 * norm.z * norm.z +
+                C4 * c.L00 -
+                C5 * c.L20 +
+                2.0 * C1 * c.L2m2 * norm.x * norm.y +
+                2.0 * C1 * c.L21  * norm.x * norm.z +
+                2.0 * C1 * c.L2m1 * norm.y * norm.z +
+                2.0 * C2 * c.L11  * norm.x +
+                2.0 * C2 * c.L1m1 * norm.y +
+                2.0 * C2 * c.L10  * norm.z
+            ) * scale;
+        }
+
+        void main() {
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+
+            // eye rotation
+            vec3 eye = vec3(278.0, 273.0, -800.0);
+            vec2 rot = 6.2831 * (vec2(0.0 , 0.0225) + vec2(1.0, 0.5) * (uMouse.xy - uResolution.xy * 0.5) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(-278.0, -274.4, -279.6);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - ro);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 2.75));
+
+            // background
+            vec3 color = vec3(0.0);
+
+            float tmin = 0.1;
+            float tmax = 5000.0;
+            vec2 obj = raymarchScene(ro, rd, tmin, tmax);
+            float id = obj.x;
+            if (id != ID_VOID) {
+                if (id == ID_FLOOR) color = vec3(0.25, 0.175, 0.1);
+                if (id == ID_CEILING) color = vec3(0.25, 0.175, 0.1);
+                if (id == ID_WALL_BACK) color = vec3(0.25, 0.175, 0.1);
+                if (id == ID_WALL_RIGHT) color = vec3(0.0, 0.0, 0.1);
+                if (id == ID_WALL_LEFT) color = vec3(0.25, 0.0, 0.0);
+                if (id == ID_LIGHT) color = vec3(10.0);
+                if (id == ID_BLOCK_SHORT) color = vec3(0.25, 0.175, 0.1);
+                if (id == ID_BLOCK_TALL) color = vec3(0.25, 0.175, 0.1);
+
+                float t = obj.y;
+                vec3 pos = ro + rd * t;
+                vec3 nor = getNormal(pos);
+
+                float amb = clamp(0.75 + 0.25 * nor.y, 0.0, 1.0);
+                vec3 difColor = diffuseColor(nor, 10.0);
+                vec3 lightColor = 0.15 * amb * difColor;
+                float occ = clamp(raymarchAO(pos, nor, 80.0), 0.0, 1.0);
+                color *= occ;
+
+                // main light
+                vec3 lightDir = normalize(vec3(-lightPos.x, -125.0, -lightPos.z) - pos);
+                float lightDist = length(vec3(-lightPos.x, -125.0, -lightPos.z) - pos);
+                float dif = max(0.0, dot(nor, lightDir));
+                vec3 h = normalize(-rd + lightDir);
+                float spe = pow(clamp(dot(h, nor), 0.0, 1.0), 4.0);
+                lightColor += dif * difColor * (1.0 / lightDist);
+                lightColor += 0.4 * dif * spe * difColor;
+
+                // light bounce on back wall
+                lightDir = normalize(vec3(-278.0, -274.4, -559.2) + pos);
+                lightDist = length(vec3(-278.0, -274.4, -559.2) + pos);
+                dif = max(0.0, dot(nor, lightDir));
+                h = normalize(-rd + lightDir);
+                spe = pow(clamp(dot(h, nor), 0.0, 1.0), 2.0);
+                lightColor += dif * difColor * (1.0 / lightDist);
+                lightColor += 0.5 * dif * spe * difColor;
+
+                // light bounce on right wall
+                lightDir = normalize(vec3(-556.0, -274.4, -279.6) - pos);
+                lightDist = length(vec3(-556.0, -274.4, -279.6) - pos);
+                dif = max(0.0, dot(nor, lightDir));
+                h = normalize(-rd + lightDir);
+                spe = pow(clamp(dot(h, nor), 0.0, 1.0), 2.0);
+                lightColor += dif * vec3(0.0, 0.0, 1.5) * (1.0 / lightDist);
+                lightColor += 0.5 * dif * spe * vec3(0.0, 0.0, 1.5);
+
+                // light bounce on left wall
+                lightDir = normalize(vec3(0.0, -274.4, -279.6) - pos);
+                lightDist = length(vec3(0.0, -274.4, -279.6) - pos);
+                dif = max(0.0, dot(nor, lightDir));
+                h = normalize(-rd + lightDir);
+                spe = pow(clamp(dot(h, nor), 0.0, 1.0), 2.0);
+                lightColor += dif * vec3(1.5, 0.0, 0.0) * (1.0 / lightDist);
+                lightColor += 0.5 * dif * spe * vec3(1.5, 0.0, 0.0);
+
+                color *= 1.0 * lightColor;
+            }
+
+            // gamma correction
+            vec3 gamma = vec3(1.0 / 2.2);
+            gl_FragColor = vec4(pow(color, gamma), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/tex00.jpg");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
