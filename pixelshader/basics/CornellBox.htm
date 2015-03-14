@@ -66,7 +66,17 @@
             return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
         }
 
-        vec2 mapObject(in vec3 p) {
+        vec2 mapBlocks(in vec3 p) {
+            // hit object ID is stored in res.x, distance to object is in res.y
+
+            vec2 res = vec2(ID_BLOCK_SHORT, sdBox(rotateY(p + vec3(370.0, 466.3, 166.0), -0.3), BLOCK_SHORT.xyz));
+            vec2 obj = vec2(ID_BLOCK_TALL, sdBox(rotateY(p + vec3(190.0, 383.3, 410.0), 0.3), BLOCK_TALL.xyz));
+            if (obj.y < res.y) res = obj;
+
+            return res;
+        }
+
+        vec2 mapScene(in vec3 p) {
             // hit object ID is stored in res.x, distance to object is in res.y
 
             vec2 res = vec2(ID_VOID, 2000.0);
@@ -85,9 +95,7 @@
             obj = vec2(ID_WALL_LEFT, sdBox(p + vec3(0.0, 274.4, 279.6), WALL_LEFT.xyz));
             if (obj.y < res.y) res = obj;
 
-            obj = vec2(ID_BLOCK_SHORT, sdBox(rotateY(p + vec3(370.0, 466.3, 166.0), -0.3), BLOCK_SHORT.xyz));
-            if (obj.y < res.y) res = obj;
-            obj = vec2(ID_BLOCK_TALL, sdBox(rotateY(p + vec3(190.0, 383.3, 410.0), 0.3), BLOCK_TALL.xyz));
+            obj = mapBlocks(p);
             if (obj.y < res.y) res = obj;
 
             return res;
@@ -100,7 +108,7 @@
             float t = tmin;
             for (int i = 0; i < 250; i++) {
                 vec3 p = ro + rd * t;
-                res = vec3(mapObject(p), t);
+                res = vec3(mapScene(p), t);
                 float d = res.y;
                 if (d < (0.0001 * t) || t > tmax)
                     break;
@@ -113,9 +121,9 @@
             // computes scene normal with central differences: http://en.wikipedia.org/wiki/Finite_difference<img src="file:///C:\Users\E-MEDIA\AppData\Local\Temp\gzwh3g76.bmp" />
             // the method is explained by Inigo Quilez in his article on terrain marching.
             vec2 eps = vec2(0.001, 0.0);
-            return normalize(vec3(mapObject(p + eps.xyy).y - mapObject(p - eps.xyy).y,
-                                  mapObject(p + eps.yxy).y - mapObject(p - eps.yxy).y,
-                                  mapObject(p + eps.yyx).y - mapObject(p - eps.yyx).y));
+            return normalize(vec3(mapScene(p + eps.xyy).y - mapScene(p - eps.xyy).y,
+                                  mapScene(p + eps.yxy).y - mapScene(p - eps.yxy).y,
+                                  mapScene(p + eps.yyx).y - mapScene(p - eps.yyx).y));
         }
 
         float raymarchAO(in vec3 ro, in vec3 rd, float tmin) {
@@ -127,10 +135,27 @@
             for (float i = 0.0; i < 5.0; i++) {
                 float t = tmin + pow(i / 5.0, 2.0);
                 vec3 p = ro + rd * t;
-                float d = mapObject(p).y;
+                float d = mapScene(p).y;
                 ao += max(0.0, t - 0.5 * d - 0.05);
             }
             return 1.0 - 0.0009 * ao;
+        }
+
+        float raymarchShadows(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            // penumbra shadows as described by IQ in article "free penumbra shadows
+            // for raymarching distance fields":
+            // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+            float sh = 1.0;
+            float t = tmin;
+            for(int i = 0; i < 50; i++) {
+                vec3 p = ro + rd * t;
+                float d = mapBlocks(p).y;
+                sh = min(sh, 16.0 * d / t);
+                t += 0.5 * d;
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+            }
+            return sh;
         }
 
         void main() {
@@ -177,8 +202,6 @@
                 vec3 pos = ro + rd * t;
                 vec3 nor = getNormal(pos);
 
-                float amb = clamp(0.75 + 0.25 * nor.y, 0.0, 1.0);
-                vec3 lightColor = 0.15 * amb * vec3(18.4, 15.6, 8.0) * 0.1; // ambient
                 float occ = clamp(raymarchAO(pos, nor, 80.0), 0.0, 1.0);    // occlusion
                 color *= occ;
 
@@ -188,8 +211,12 @@
                 float dif = max(0.0, dot(nor, lightDir));
                 vec3 h = normalize(-rd + lightDir);
                 float spe = pow(clamp(dot(h, nor), 0.0, 1.0), 4.0);
-                lightColor += dif * vec3(18.4, 15.6, 8.0) * (1.0 / lightDist);
-                lightColor += 0.4 * dif * spe * vec3(18.4, 15.6, 8.0);
+                vec3 lightColor = dif * vec3(18.4, 15.6, 8.0) * (1.0 / lightDist);
+                lightColor += 0.25 * dif * spe * vec3(18.4, 15.6, 8.0);
+
+                lightDir = normalize(vec3(-lightPos.x, 50.0, -lightPos.z - 40.0) - pos);
+                float sha = clamp(raymarchShadows(pos, lightDir, 0.5, 500.0), 0.5, 1.0);
+                if (id != ID_LIGHT && id != ID_CEILING) lightColor *= sha;
 
                 // light bounce on back wall
                 lightDir = normalize(vec3(-278.0, -100.4, -559.2) + pos);
@@ -217,6 +244,9 @@
                 h = normalize(-rd + lightDir);
                 spe = pow(clamp(dot(h, nor), 0.0, 1.0), 2.0);
                 lightColor += 0.5 * dif * spe * vec3(1.5, 0.0, 0.0);
+
+                float amb = clamp(0.75 + 0.25 * nor.y, 0.0, 1.0);
+                lightColor += 0.15 * amb * vec3(18.4, 15.6, 8.0) * 0.1; // ambient
 
                 color *= 1.0 * lightColor;
             }
