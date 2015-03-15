@@ -28,17 +28,17 @@
         uniform vec4 uMouse;
         uniform sampler2D uTexture0;
 
-        const float ID_NONE        = -1.0;
-        const float ID_FLOOR       =  0.10;
-        const float ID_CEILING     =  0.11;
-        const float ID_WALL_BACK   =  0.12;
-        const float ID_WALL_RIGHT  =  0.13;
-        const float ID_WALL_LEFT   =  0.14;
-        const float ID_LIGHT       =  0.15;
-        const float ID_BLOCK_SHORT =  0.16;
-        const float ID_BLOCK_TALL  =  0.17;
+        #define ID_NONE           -1.0
+        #define ID_FLOOR           0.10
+        #define ID_CEILING         0.11
+        #define ID_WALL_BACK       0.12
+        #define ID_WALL_RIGHT      0.13
+        #define ID_WALL_LEFT       0.14
+        #define ID_LIGHT           0.15
+        #define ID_BLOCK_SHORT     0.16
+        #define ID_BLOCK_TALL      0.17
 
-        const float ID_VOID        =  1.0;
+        #define ID_VOID            1.0
 
         // http://www.graphics.cornell.edu/online/box/data.html
         const vec4 FLOOR       = vec4(278.0, 0.0, 279.6, ID_FLOOR);
@@ -118,7 +118,7 @@
         }
 
         vec3 getNormal(in vec3 p) {
-            // computes scene normal with central differences: http://en.wikipedia.org/wiki/Finite_difference<img src="file:///C:\Users\E-MEDIA\AppData\Local\Temp\gzwh3g76.bmp" />
+            // computes scene normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
             // the method is explained by Inigo Quilez in his article on terrain marching.
             vec2 eps = vec2(0.001, 0.0);
             return normalize(vec3(mapScene(p + eps.xyy).y - mapScene(p - eps.xyy).y,
