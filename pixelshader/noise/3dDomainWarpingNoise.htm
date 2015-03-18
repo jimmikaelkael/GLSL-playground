@@ -69,12 +69,11 @@
             // Domain warping:
             // http://www.iquilezles.org/www/articles/warp/warp.htm
             if (p.x < -0.005) {
-                //color = vec3(0.5 * pattern2(pos));
                 pos *= 0.5;
                 float q = fBm(pos + vec3(8.5, 2.7, 5.3));
                 float r = fBm(pos + vec3(4.6, 6.9, 2.1));
                 float w = fBm(pos + 4.0 * q + 8.0 * r);
-                color = vec3(0.7 * w);
+                color = vec3(0.5 * w);
             } else {
                 pos *= 0.15;
                 vec3 q, r;
@@ -84,8 +83,8 @@
                 r.x = fBm(pos + 2.0 * q + vec3(1.7,9.2,5.2));
                 r.y = fBm(pos + 2.0 * q + vec3(8.3,2.8,4.8));
                 r.z = fBm(pos + 2.0 * q + vec3(5.7,4.3,2.4));
-                color = vec3(0.7 * fBm(pos + 4.0 * r));
-                //color = vec3(0.7 * pattern2(0.15 * pos));
+                float w = fBm(pos + 4.0 * r);
+                color = vec3(0.5 * w);
             }
 
             // the black line

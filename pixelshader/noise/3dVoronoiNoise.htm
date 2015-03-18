@@ -40,7 +40,7 @@
             vec3 p = floor(x);
             vec3 f = fract(x);
 
-            float s = 1.0 + 63.0 * v;
+            float s = 1.0 + 31.0 * v;
             float va = 0.0;
             float wt = 0.0;
             for (int k=-2; k<=1; k++)
@@ -79,7 +79,7 @@
             if (p.x < -0.005) {
                 color = vec3(0.5 * fBm(pos, 1.0));
             } else {
-                color = vec3(0.5 * fBm(pos, 0.1));
+                color = vec3(0.5 * fBm(pos, 0.2));
             }
 
             // the black line
