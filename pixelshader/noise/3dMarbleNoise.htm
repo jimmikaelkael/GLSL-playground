@@ -26,23 +26,16 @@
         uniform vec2 uResolution;
         uniform float uGlobalTime;
         uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
 
-        float hash(in vec3 p) {
-            return fract(sin(dot(p, vec3(12.9898, 39.1215, 78.233))) * 43758.5453);
-        }
-
-        float noise(in vec3 p) {
-            vec3 i = floor(p);
-            vec3 f = fract(p);
+        float noise(vec3 x) {
+            // fast 3d noise fetched from 2d rgb texture by IQ.
+            vec3 p = floor(x);
+            vec3 f = fract(x);
             f = f * f * (3.0 - 2.0 * f);
-            return mix(
-                mix(mix(hash(i + vec3(0.0, 0.0, 0.0)), hash(i + vec3(1.0, 0.0, 0.0)), f.x),
-                    mix(hash(i + vec3(0.0, 1.0, 0.0)), hash(i + vec3(1.0, 1.0, 0.0)), f.x),
-                    f.y),
-                mix(mix(hash(i + vec3(0.0, 0.0, 1.0)), hash(i + vec3(1.0, 0.0, 1.0)), f.x),
-                    mix(hash(i + vec3(0.0, 1.0, 1.0)), hash(i + vec3(1.0, 1.0, 1.0)), f.x),
-                    f.y),
-                f.z);
+            vec2 uv = (p.xy + vec2(37.0, 17.0) * p.z) + f.xy;
+            vec2 rg = texture2D(uTexture0, (uv + 0.5) / 256.0, -100.0).yx;
+            return mix(rg.x, rg.y, f.z);
         }
 
         float fBm(in vec3 p) {
@@ -122,12 +115,17 @@
             // add the camera to the scene
             scene.add(camera);
 
+            // load noise texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_rgb.png");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
             // create a shader material
             material = new THREE.ShaderMaterial({
                 uniforms: {
                     uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
                     uGlobalTime: { type:"f", value: 1.0 },
-                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) }
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
                 },
                 vertexShader: document.getElementById('vertexShader').textContent,
                 fragmentShader: document.getElementById('fragmentShader').textContent,
