@@ -1,0 +1,511 @@
+<html lang="en">
+    <head>
+        <title>WebGL/GLSL - Mars Pixel Shader</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="../../css/styles.css">
+    </head>
+
+    <body>
+        <div id="container"></div>
+    </body>
+
+    <script src="../../js/Three.min.js"></script>
+    <script src="../../js/Detector.js"></script>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        // Vertex Shader code
+
+        void main() {
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        // Fragment Shader code
+
+        // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+        // This shader has been an entry for the NVScene 2015 Shadertoy Hackaton.
+
+        uniform vec2 uResolution;
+        uniform float uGlobalTime;
+        uniform vec4 uMouse;
+        uniform sampler2D uTexture0;
+
+        vec3 skyColor = vec3(0.65, 0.28, 0.1);
+        vec3 sunColor = vec3(1.8, 1.0, 0.6);
+        vec3 sunLightColor = vec3(1.7, 1.25, 0.9);
+        vec3 skyLightColor = vec3(0.8, 0.35, 0.15);
+        vec3 indLightColor = vec3(0.4, 0.3, 0.2);
+        vec3 horizonColor = vec3(0.85, 0.35, 0.15);
+
+        vec3 sunDirection = normalize(vec3(0.6, 0.4, 0.9));
+
+        float noise(in vec2 p) {
+            p += vec2(16.6, 17.0);
+            return texture2D(uTexture0, p / 256.0, -100.0).x;
+        }
+
+        float noise3d(vec3 x) {
+            // fast 3d noise fetched from 2d rgb texture by IQ.
+            vec3 p = floor(x);
+            vec3 f = fract(x);
+            f = f * f * (3.0 - 2.0 * f);
+            vec2 uv = (p.xy + vec2(37.0, 17.0) * p.z) + f.xy;
+            vec2 rg = texture2D(uTexture0, (uv + 0.5) / 256.0, -100.0).yx;
+            return mix(rg.x, rg.y, f.z);
+        }
+
+        float fBm(in vec2 p) {
+            float sum = 0.0;
+            float amp = 1.0;
+            for(int i = 0; i < 4; i++) {
+                sum += amp * noise(p);
+                amp *= 0.5;
+                p *= 2.5;
+            }
+            return sum * 0.5 + 0.15;
+        }
+
+        float fBm3d(in vec3 p) {
+            float sum = 0.0;
+            float amp = 1.0;
+            for(int i = 0; i < 4; i++) {
+                sum += amp * noise3d(p);
+                amp *= 0.5;
+                p *= 2.0;
+            }
+            return sum;
+        }
+
+        float warp(in vec3 p) {
+            vec3 q, r;
+            q.x = fBm3d(p);
+            q.y = fBm3d(p + vec3(5.2,1.3,8.4));
+            q.z = fBm3d(p + vec3(2.2,5.4,7.9));
+            r.x = fBm3d(p + 2.0 * q + vec3(1.7,9.2,5.2));
+            r.y = fBm3d(p + 2.0 * q + vec3(8.3,2.8,4.8));
+            r.z = fBm3d(p + 2.0 * q + vec3(5.7,4.3,2.4));
+            return fBm3d(p + 4.0 * r);
+        }
+
+        float length2(in vec2 p) {
+            return sqrt(p.x*p.x + p.y*p.y);
+        }
+
+        float length8(in vec2 p) {
+            p = p*p; p = p*p; p = p*p;
+            return pow(p.x + p.y, 1.0 / 8.0);
+        }
+
+        float sdTorus82(in vec3 p, in vec2 t) {
+            // signed torus distance function, check out IQ's page
+            // for a list of useful distance functions:
+            // http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+            vec2 q = vec2(length2(p.xz) - t.x, p.y);
+            return length8(q) - t.y;
+        }
+
+        float sdBox(in vec3 p, in vec3 box) {
+            // signed box distance function, check out IQ's page
+            // for a list of useful distance functions:
+            // http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+            vec3 d = abs(p) - box;
+            return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
+        }
+
+        float sdSphere(in vec3 p, float s) {
+            // signed sphere distance function, check out IQ's page
+            // for a list of useful distance functions:
+            // http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+            return length(p) - s;
+        }
+
+        float sdTriPrism(in vec3 p, vec2 h) {
+            // signed triangular prism distance function, check out IQ's page
+            // for a list of useful distance functions:
+            // http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+            vec3 q = abs(p);
+            return max(q.z - h.y, max(q.x * 0.866025 + p.y * 0.5, -p.y) - h.x * 0.5);
+        }
+
+        float smin(float a, float b, float k) {
+            // smooth minimum, used to blend shapes:
+            // http://www.iquilezles.org/www/articles/smin/smin.htm
+            float res = exp(-k * a) + exp(-k * b);
+            return -log(res) / k;
+        }
+
+        vec3 rotateX(in vec3 p, float an) {
+            float c = cos(an);
+            float s = sin(an);
+            return vec3(p.x, c * p.y - s * p.z, s * p.y + c * p.z);
+        }
+
+        vec3 rotateY(in vec3 p, float an) {
+            float c = cos(an);
+            float s = sin(an);
+            return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+        }
+
+        vec3 rotateZ(in vec3 p, float an) {
+            float c = cos(an);
+            float s = sin(an);
+            return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+        }
+
+        vec2 map(in vec3 p, bool frame) {
+            vec2 res = vec2(0.0, p.y - fBm(p.xz));
+            if (frame) {
+                float d1 = sdBox(rotateX(rotateY(p - vec3(0.0, 1.0, 0.0), -1.25), 1.58), vec3(0.5, 0.0, 0.5));
+                vec2 obj = vec2(1.0, max(d1, sdSphere(p - vec3(0.0, 1.0, 0.0), 0.5)));
+                if (obj.y < res.y) res = obj;
+            }
+            float d2 = sdTriPrism(rotateX(rotateY(p - vec3(0.0, 1.51, 0.0), -1.25), 3.14159), vec2(0.025, 0.055));
+            vec2 obj = vec2(2.0, smin(sdTorus82(rotateX(rotateY(p - vec3(0.0, 1.0, 0.0), -1.25), 1.58), vec2(0.5, 0.05)), d2, 16.0));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.0, sdTriPrism(rotateX(rotateY(p - vec3(0.0, 1.51, 0.0), -1.25), 3.14159), vec2(0.025, 0.1)));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.1, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.1, 1.41, 0.3), -1.25), 3.14159), 0.68), vec2(0.025, 0.055)));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.2, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.1, 1.41, -0.3), -1.25), 3.14159), -0.68), vec2(0.025, 0.055)));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.3, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.155, 1.15, 0.47), -1.25), 3.14159), 1.26), vec2(0.025, 0.055)));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.4, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.155, 1.15, -0.47), -1.25), 3.14159), -1.26), vec2(0.025, 0.055)));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.5, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.152, 0.825, 0.467), -1.25), 3.14159), 1.94), vec2(0.025, 0.055)));
+            if (obj.y < res.y) res = obj;
+            obj = vec2(3.6, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.157, 0.825, -0.467), -1.25), 3.14159), -1.94), vec2(0.025, 0.055)));
+            if (obj.y < res.y) res = obj;
+
+            return res;
+        }
+
+        vec2 map(in vec3 p) {
+            return map(p, true);
+        }
+
+        vec3 raymarchTerrain(in vec3 ro, in vec3 rd, in float tmin, in float tmax) {
+            // terrain marching as explained by Inigo Quilez in his articles:
+            // http://www.iquilezles.org/www/articles/terrainmarching/terrainmarching.htm
+            float t = tmin;
+            vec3 res = vec3(-1.0);
+            for (int i = 0; i < 110; i++) {
+                vec3 p = ro + rd * t;
+                res = vec3(map(p), t);
+                float d = res.y;
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+                t += 0.5 * d;
+            }
+            return res;
+        }
+
+        vec3 getTerrainNormal(in vec3 p) {
+            // computes terrain normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            float eps = 0.025;
+            return normalize(vec3(fBm(vec2(p.x - eps, p.z)) - fBm(vec2(p.x + eps, p.z)),
+                                  2.0 * eps,
+                                  fBm(vec2(p.x, p.z - eps)) - fBm(vec2(p.x, p.z + eps))));
+        }
+
+        vec3 getGateNormal(in vec3 p, float e) {
+            // computes scene normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            vec2 eps = vec2(e, 0.0);
+            return normalize(vec3(map(p + eps.xyy).y - map(p - eps.xyy).y,
+                                  2.0 * eps.x,
+                                  map(p + eps.yyx).y - map(p - eps.yyx).y));
+        }
+
+        vec3 getGateBump(in vec3 p, float e) {
+            // computes scene normal with central differences: http://en.wikipedia.org/wiki/Finite_difference
+            // the method is explained by Inigo Quilez in his article on terrain marching.
+            vec2 eps = vec2(e, 0.0);
+            return normalize(vec3(fBm3d(p + eps.xyy) - fBm3d(p - eps.xyy),
+                                  //2.0 * eps.x,
+                                  fBm3d(p + eps.yxy) - fBm3d(p - eps.yxy),
+                                  fBm3d(p + eps.yyx) - fBm3d(p - eps.yyx)));
+        }
+
+        float raymarchAO(in vec3 ro, in vec3 rd, float tmin) {
+            // the technique is explained in one of IQ's presentations: NVScene 08 - Rendering Worlds With Two Triangles
+            // http://www.iquilezles.org/www/material/nvscene2008/rwwtt.pdf (pages 47 to 54, formula on page 53)
+            // the original basic technique was presented by Alex Evans in SIGGRAPH 2006 paper:
+            // http://developer.amd.com/wordpress/media/2012/10/Course_26_SIGGRAPH_2006.pdf (chapter 9)
+            float ao = 0.0;
+            for (float i = 0.0; i < 5.0; i++) {
+                float t = tmin + pow(i / 5.0, 2.0);
+                vec3 p = ro + rd * t;
+                float d = p.y - fBm(p.xz);
+                ao += max(0.0, t - 0.5 * d - 0.05);
+            }
+            return 1.0 - 0.4 * ao;
+        }
+
+        float raymarchShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            // penumbra shadows as described by IQ in article "free penumbra shadows
+            // for raymarching distance fields":
+            // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+            float sh = 1.0;
+            float t = tmin;
+            for(int i = 0; i < 40; i++) {
+                vec3 p = ro + rd * t;
+                float d = p.y - fBm(p.xz);
+                sh = min(sh, 16.0 * d / t);
+                t += 1.5 * d;
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+            }
+            return sh;
+        }
+
+        float raymarchGateShadow(in vec3 ro, in vec3 rd, float tmin, float tmax) {
+            // penumbra shadows as described by IQ in article "free penumbra shadows
+            // for raymarching distance fields":
+            // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+            float sh = 1.0;
+            float t = tmin;
+            for(int i = 0; i < 80; i++) {
+                vec3 p = ro + rd * t;
+                float d = map(p, false).y;
+                sh = min(sh, 16.0 * d / t);
+                t += 1.5 * d;
+                if (d < (0.001 * t) || t > tmax)
+                    break;
+            }
+            return sh;
+        }
+
+        void main() {
+            vec2 p = (-uResolution.xy + 2.0 * gl_FragCoord.xy) / uResolution.y;
+
+            // eye rotation
+            vec3 eye = vec3(0.0, 1.25, 1.5);
+            vec2 rot = 6.2831 * (vec2(-0.05 + uGlobalTime * 0.025, 0.0 - sin(uGlobalTime * 0.5) * 0.01) + vec2(1.0, 0.0) * (uMouse.xy - uResolution.xy * 0.25) / uResolution.x);
+            eye.yz = cos(rot.y) * eye.yz + sin(rot.y) * eye.zy * vec2(-1.0, 1.0);
+            eye.xz = cos(rot.x) * eye.xz + sin(rot.x) * eye.zx * vec2(1.0, -1.0);
+
+            // origin displacement and view direction
+            vec3 ro = eye;
+            vec3 ta = vec3(0.5, 1.0, 0.0);
+
+            // build camera matrix, I suggest reading the following for camera to world transformation:
+            // http://www.cs.toronto.edu/~jepson/csc2503/readings/Camera.pdf (chapter 6.5)
+            vec3 cw = normalize(ta - eye);
+            vec3 cu = normalize(cross(vec3(0.0, 1.0, 0.0), cw));
+            vec3 cv = normalize(cross(cw, cu));
+            mat3 cam = mat3(cu, cv, cw);
+
+            // compute ray direction
+            vec3 rd = cam * normalize(vec3(p.xy, 1.0));
+
+            // background
+            vec3 color = skyColor;
+
+            // terrain marching
+            float tmin = 0.1;
+            float tmax = 20.0;
+            vec3 res = raymarchTerrain(ro, rd, tmin, tmax);
+            float t = res.z;
+            if (t < tmax) {
+                vec3 pos = ro + rd * t;
+                vec3 nor;
+                // add bumps to terrain
+                if (res.x == 0.0) {
+                    nor = getTerrainNormal(pos);
+                    nor = normalize(nor + 0.5 * getTerrainNormal(pos * 8.0));
+                } else if (res.x == 1.0){
+                    nor = getGateNormal(pos, 0.1);
+                    nor = normalize(nor + 0.05 * getGateBump(pos * 4.0 + vec3(uGlobalTime * 0.25, 1.0, 1.0), 0.005));
+                } else if (res.x == 2.0){
+                    nor = getGateNormal(pos, 0.005);
+                    nor = normalize(nor + 0.25 * getGateBump(pos * 32.0, 0.005));
+                } else {
+                    nor = getGateNormal(pos, 0.005);
+                    nor = normalize(nor + 0.1 * getGateBump(pos * 16.0, 0.005));
+                }
+
+                // 3 lights rig as explained by Inigo Quilez in outdoor lighting article:
+                // http://www.iquilezles.org/www/articles/outdoorslighting/outdoorslighting.htm
+                // light from sun direction
+                float sun = clamp(dot(sunDirection, nor), 0.0, 1.0);
+                // light from skydome
+                float sky = clamp(0.5 + 0.5 * nor.y, 0.0, 1.0);
+                // indirect light reflected back in opposite direction of the sun
+                float ind = clamp(dot(vec3(-sunDirection.x, 0.0, -sunDirection.z), nor), 0.0, 1.0);
+                // raymarching AO from position in its normal direction
+                float occ = clamp(raymarchAO(pos, nor, 0.1), 0.0, 1.0);
+                // raymarching penumbra shadows in sun direction
+                float sha1 = clamp(raymarchShadow(pos, sunDirection, 0.25, tmax), 0.0, 1.0);
+                float sha2 = clamp(raymarchGateShadow(pos, sunDirection, 0.05, tmax), 0.0, 1.0);
+                // compute light color
+                vec3 lightColor = 1.0 * sun * sunLightColor;        // sunlight
+                lightColor *= pow(vec3(sha1), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
+                lightColor *= pow(vec3(sha2), vec3(1.0, 1.2, 1.5)); // multiply sunlight by penumbra shadows
+                lightColor += 0.7 * sky * skyLightColor * occ;      // add skylight
+                lightColor += 0.3 * ind * indLightColor * occ;      // add backlight
+
+                if (res.x == 1.0) {
+                    vec3 h = normalize(-rd + sunDirection);
+                    float spe = pow(clamp(dot(h, nor), 0.0, 1.0), 2.0);
+                    float fresnel = 1.0;
+                    float fre = fresnel + (1.0 - fresnel) * pow(1.0 - dot(nor, -rd), 5.0);
+                    lightColor += 32.0 * spe * sun * occ;
+                    color = vec3(0.05, 0.2, 0.8) * 2.0 * warp(pos * 2.0 + vec3(uGlobalTime * 0.15, 1.0, 1.0));
+                    lightColor *= pow(indLightColor, vec3(1.0)) * fre;
+                } else if (res.x == 2.0) {
+                    vec3 ref = reflect(rd, -sunDirection);
+                    float spe = pow(clamp(dot(ref, nor), 0.0, 1.0), 2.0);
+                    float fresnel = 1.0;
+                    float fre = fresnel + (1.0 - fresnel) * pow(1.0 - dot(nor, -rd), 5.0);
+                    lightColor += 32.0 * spe * sun * occ;
+                    color = vec3(0.1, 0.11, 0.15) * 0.05;
+                    lightColor *= pow(indLightColor, vec3(1.0)) * fre;
+                } else if (res.x > 2.0) {
+                    vec3 ref = reflect(rd, -sunDirection);
+                    float spe = pow(clamp(dot(ref, nor), 0.0, 1.0), 2.0);
+                    float fresnel = 1.0;
+                    float fre = fresnel + (1.0 - fresnel) * pow(1.0 - dot(nor, -rd), 5.0);
+                    lightColor += 16.0 * spe * sun * occ;
+                    color = vec3(0.2, 0.1, 0.01);
+                    lightColor *= pow(indLightColor, vec3(1.0)) * fre;
+                }
+
+                color *= 0.8 * lightColor;
+
+                color = mix(color, horizonColor, 1.0 - exp(-0.01 * t * t));
+            } else {
+                // the powerful sun dot
+                float sunDot = clamp(dot(sunDirection, rd), 0.0, 1.0);
+                // sky and sun
+                float sky = clamp(0.8 * (1.0 - 0.8 * rd.y), 0.0, 1.0);
+                float diffuse = clamp(0.4 * sunDot, 0.0, 1.0);
+                color = sky * skyColor + pow(sunDot, 2000.0) * sunColor;
+
+                // horizon
+                color = mix(color, horizonColor, pow(1.0 - rd.y, 4.0));
+            }
+
+            // gamma correction
+            vec3 gamma = vec3(1.0 / 2.2);
+            gl_FragColor = vec4(pow(color, gamma), 1.0);
+        }
+    </script>
+
+    <script type="text/javascript" id="mainCode">
+        var container,
+            renderer,
+            scene,
+            mesh,
+            camera,
+            leftMouseButtonDown = false,
+            clock = new THREE.Clock();
+
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('load', function() {
+
+            // grab the container from the DOM
+            container = document.getElementById("container");
+
+            // create a scene
+            scene = new THREE.Scene();
+
+            // create a camera the size of the browser window
+            camera = new THREE.PerspectiveCamera(
+                90,
+                window.innerWidth / window.innerHeight,
+                1,
+                10000);
+            camera.position.z = 200;
+
+            // add the camera to the scene
+            scene.add(camera);
+
+            // load noise texture
+            var tex0 = THREE.ImageUtils.loadTexture("textures/noise_rgb.png");
+            tex0.wrapS = tex0.wrapT = THREE.RepeatWrapping;
+
+            // create a shader material
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uResolution: { type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlobalTime: { type:"f", value: 1.0 },
+                    uMouse: { type:"v4", value: new THREE.Vector4(0, 0, 0, 0) },
+                    uTexture0: { type:"t", value: tex0 }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                depthTest: false
+            });
+
+            // create a plane mesh and assign the material, then add the mesh to the scene (fullscreen quad)
+            mesh = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(2, 2),
+                material
+            );
+            scene.add(mesh);
+
+            // create the renderer and attach it to the DOM
+            if (Detector.webgl)
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias:true
+                });
+            else
+                renderer = new THREE.CanvasRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            render();
+        });
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms["uResolution"].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = true;
+            }
+            var vec4Mouse = material.uniforms["uMouse"].value;
+            vec4Mouse.z = e.clientX;
+            vec4Mouse.w = e.clientY;
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 0) {
+                leftMouseButtonDown = false;
+            } else {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.z = 0.0;
+                vec4Mouse.w = 0.0;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (leftMouseButtonDown === true) {
+                var vec4Mouse = material.uniforms["uMouse"].value;
+                vec4Mouse.x = e.clientX;
+                vec4Mouse.y = e.clientY;
+            }
+        }
+
+        function render() {
+            material.uniforms["uGlobalTime"].value = clock.getElapsedTime();
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(render);
+        }
+    </script>
+
+</html>
