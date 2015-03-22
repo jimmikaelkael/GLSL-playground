@@ -161,21 +161,23 @@
                 if (obj.y < res.y) res = obj;
             }
             float d2 = sdTriPrism(rotateX(rotateY(p - vec3(0.0, 1.51, 0.0), -1.25), 3.14159), vec2(0.025, 0.055));
-            vec2 obj = vec2(2.0, smin(sdTorus82(rotateX(rotateY(p - vec3(0.0, 1.0, 0.0), -1.25), 1.58), vec2(0.5, 0.05)), d2, 16.0));
+            float d3 = sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.112, 0.635, 0.35), -1.25), 3.14159), 2.35), vec2(0.025, 0.055));
+            float d4 = sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.112, 0.635, -0.35), -1.25), 3.14159), -2.35), vec2(0.025, 0.055));
+            vec2 obj = vec2(2.0, smin(smin(smin(sdTorus82(rotateX(rotateY(p - vec3(0.0, 1.0, 0.0), -1.25), 1.58), vec2(0.5, 0.05)), d2, 16.0), d3, 16.0), d4, 16.0));
             if (obj.y < res.y) res = obj;
             obj = vec2(3.0, sdTriPrism(rotateX(rotateY(p - vec3(0.0, 1.51, 0.0), -1.25), 3.14159), vec2(0.025, 0.1)));
             if (obj.y < res.y) res = obj;
-            obj = vec2(3.1, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.1, 1.41, 0.3), -1.25), 3.14159), 0.68), vec2(0.025, 0.055)));
+            obj = vec2(3.1, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.122, 1.36, 0.35), -1.25), 3.14159), 0.84), vec2(0.025, 0.055)));
             if (obj.y < res.y) res = obj;
-            obj = vec2(3.2, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.1, 1.41, -0.3), -1.25), 3.14159), -0.68), vec2(0.025, 0.055)));
+            obj = vec2(3.2, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.117, 1.36, -0.35), -1.25), 3.14159), -0.84), vec2(0.025, 0.055)));
             if (obj.y < res.y) res = obj;
-            obj = vec2(3.3, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.155, 1.15, 0.47), -1.25), 3.14159), 1.26), vec2(0.025, 0.055)));
+            obj = vec2(3.3, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.162, 1.0, 0.49), -1.25), 3.14159), 1.6), vec2(0.025, 0.055)));
             if (obj.y < res.y) res = obj;
-            obj = vec2(3.4, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.155, 1.15, -0.47), -1.25), 3.14159), -1.26), vec2(0.025, 0.055)));
+            obj = vec2(3.4, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.162, 1.0, -0.49), -1.25), 3.14159), -1.6), vec2(0.025, 0.055)));
             if (obj.y < res.y) res = obj;
-            obj = vec2(3.5, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.152, 0.825, 0.467), -1.25), 3.14159), 1.94), vec2(0.025, 0.055)));
+            obj = vec2(3.5, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(-0.112, 0.635, 0.35), -1.25), 3.14159), 2.35), vec2(0.025, 0.1)));
             if (obj.y < res.y) res = obj;
-            obj = vec2(3.6, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.157, 0.825, -0.467), -1.25), 3.14159), -1.94), vec2(0.025, 0.055)));
+            obj = vec2(3.6, sdTriPrism(rotateZ(rotateX(rotateY(p - vec3(0.115, 0.635, -0.35), -1.25), 3.14159), -2.35), vec2(0.025, 0.1)));
             if (obj.y < res.y) res = obj;
 
             return res;
